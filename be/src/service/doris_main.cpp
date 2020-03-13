@@ -124,6 +124,10 @@ int main(int argc, char** argv) {
     // Must init custom config after init config, separately.
     // Because the path of custom config file is defined in be.conf
     string conffile = string(getenv("DORIS_HOME")) + "/conf/be.conf";
+    if (getenv("DORIS_CONF_HOME") != nullptr) {
+        conffile = string(getenv("DORIS_CONF_HOME")) + "/be.conf";
+    }
+
     if (!doris::config::init(conffile.c_str(), true, true, true)) {
         fprintf(stderr, "error read config file. \n");
         return -1;

@@ -1,0 +1,54 @@
+image:
+  name: cr.d.xiaomi.net/doris/doris:1.2-mdh-2.0
+
+variables:
+  KUBERNETES_CPU_REQUEST: 6
+  KUBERNETES_MEMORY_REQUEST: 16Gi
+
+before_script:
+  - ulimit -a
+  - echo "Working Directory is $(pwd)"
+  - ln -sf /usr/share/zoneinfo/Asia/Shanghai  /etc/localtime  
+  - date -R  
+
+stages:
+  - test
+  - build  
+  - package
+
+test_be_job:
+  stage: test
+  script:
+    - ./run-be-ut.sh --run
+
+test_be_job_asan:
+  stage: test
+  script:
+    - BUILD_TYPE=ASAN ./run-be-ut.sh --run
+
+test_be_job_lsan:
+  stage: test
+  script:
+    - BUILD_TYPE=LSAN ./run-be-ut.sh --run
+
+test_fe_job:
+  stage: test
+  script:
+    - ./run-fe-ut.sh
+
+package_job:
+  only:
+    - tags
+    - branch-0.13-mdh
+  stage: package
+  variables:
+    MINOS_CONFIG_FILE: '$CI_PROJECT_DIR/deployment-config/deploy.cfg'
+    MINOS2_CONFIG_FILE: '$CI_PROJECT_DIR/deployment/deploy.cfg'
+  script:
+    - git clone git@git.n.xiaomi.com:teg-devops/minos.git
+    - git clone git@git.n.xiaomi.com:teg-devops/deployment-config.git
+    - git clone git@git.n.xiaomi.com:teg-devops/deployment.git
+    - cd minos && ./build.sh build
+    - cd ../ && ./make_distribution.sh
+    - cd minos/client/ && ./package install doris --package_dir=$CI_PROJECT_DIR --version=0.13-branch-mdh
+  when: on_success

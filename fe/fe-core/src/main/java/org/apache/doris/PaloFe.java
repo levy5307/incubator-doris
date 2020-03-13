@@ -82,7 +82,11 @@ public class PaloFe {
 
             // init config
             Config config = new Config();
-            config.init(dorisHomeDir + "/conf/fe.conf");
+            String dorisConfHome = System.getenv("DORIS_CONF_HOME");
+            if (Strings.isNullOrEmpty(dorisConfHome)) {
+                dorisConfHome = dorisHomeDir + "/conf/";
+            }
+            config.init(dorisConfHome + "/fe.conf");
             // Must init custom config after init config, separately.
             // Because the path of custom config file is defined in fe.conf
             config.initCustom(Config.custom_config_dir + "/fe_custom.conf");
