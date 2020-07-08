@@ -1298,4 +1298,10 @@ public class Config extends ConfigBase {
     public static int min_replica_num = 1;
     @ConfField(mutable = true)
     public static int max_replica_num = Integer.MAX_VALUE;
+    
+    /** 
+     * exec memory limit
+     */
+    @ConfField(mutable = true)
+    public static long exec_mem_limit = 16 * 1024 * 1024 * 1024L;
 }

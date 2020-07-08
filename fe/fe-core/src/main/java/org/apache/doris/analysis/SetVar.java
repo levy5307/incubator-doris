@@ -19,6 +19,7 @@ package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
@@ -143,7 +144,11 @@ public class SetVar {
         }
 
         if (getVariable().toLowerCase().equals("exec_mem_limit")) {
-            this.value = new StringLiteral(Long.toString(ParseUtil.analyzeDataVolumn(getValue().getStringValue())));
+            Long value = ParseUtil.analyzeDataVolumn(getValue().getStringValue());
+            if (value > Config.exec_mem_limit) {
+                throw new AnalysisException("the value for exec_mem_limit cannot exceed " + Config.exec_mem_limit);
+            }
+            this.value = new StringLiteral(Long.toString(value));
             this.result = (LiteralExpr) this.value;
         }
     }

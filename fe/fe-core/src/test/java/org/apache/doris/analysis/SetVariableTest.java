@@ -63,10 +63,10 @@ public class SetVariableTest {
 
     @Test
     public void testExecMemLimit() throws Exception {
-        String setStr = "set exec_mem_limit = @@exec_mem_limit * 10";
+        String setStr = "set exec_mem_limit = @@exec_mem_limit * 5";
         connectContext.getState().reset();
         StmtExecutor stmtExecutor = new StmtExecutor(connectContext, setStr);
         stmtExecutor.execute();
-        Assert.assertEquals(21474836480L, connectContext.getSessionVariable().getMaxExecMemByte());
+        Assert.assertEquals(10737418240L, connectContext.getSessionVariable().getMaxExecMemByte());
     }
 }
