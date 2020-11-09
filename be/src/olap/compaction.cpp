@@ -33,7 +33,9 @@ Compaction::Compaction(TabletSharedPtr tablet, const std::string& label, const s
           _input_row_num(0),
           _state(CompactionState::INITED) {}
 
-Compaction::~Compaction() {}
+Compaction::~Compaction() {
+    VLOG(1) << _mem_tracker->LogUsage(0);
+}
 
 OLAPStatus Compaction::do_compaction(int64_t permits) {
     TRACE("start to do compaction");
