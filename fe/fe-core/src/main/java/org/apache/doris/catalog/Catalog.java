@@ -3664,6 +3664,10 @@ public class Catalog {
             boolean isReplicationNumSet = properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM);
             replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
             if (isReplicationNumSet) {
+		//check replica num
+		if (replicationNum < Config.min_replica_num || replicationNum > Config.max_replica_num) {
+                    throw new DdlException("replication num should be in["+Config.min_replica_num+","+Config.max_replica_num+"]");
+		}
                 olapTable.setReplicationNum(replicationNum);
             }
         } catch (AnalysisException e) {
