@@ -1295,7 +1295,7 @@ public class Config extends ConfigBase {
     public static String http_api_extra_base_path = "";
 
     @ConfField(mutable = true)
-    public static int min_replica_num = 3;
+    public static int min_replica_num = 1;
     @ConfField(mutable = true)
-    public static int max_replica_num = 3;
+    public static int max_replica_num = Integer.MAX_VALUE;
 }
