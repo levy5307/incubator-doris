@@ -156,7 +156,13 @@ Status ParquetScanner::open_next_reader() {
         if (status.is_end_of_file()) {
             continue;
         } else {
-            return status;
+            if (!status.ok()) {
+                std::stringstream ss;
+                ss << " file: " << range.path << " error:" << status.to_string();
+                return Status::InternalError(ss.str());
+            } else {
+                return status;
+            }
         }
     }
 }
