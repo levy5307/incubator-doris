@@ -13,7 +13,7 @@ before_script:
 
 stages:
   - test
-  - build  
+  - build
   - package
 
 test_be_job:
@@ -50,5 +50,6 @@ package_job:
     - git clone git@git.n.xiaomi.com:teg-devops/deployment.git
     - cd minos && ./build.sh build
     - cd ../ && ./make_distribution.sh
-    - cd minos/client/ && ./package install doris --package_dir=$CI_PROJECT_DIR --version=0.13-branch-mdh
+    - BUILD_VERSION=`egrep "^build_version" gensrc/script/gen_build_version.sh | awk '-F"' '{print $2}'`
+    - cd minos/client/ && ./package install doris --package_dir=$CI_PROJECT_DIR --version=$BUILD_VERSION
   when: on_success
