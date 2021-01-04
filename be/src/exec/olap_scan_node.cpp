@@ -45,27 +45,24 @@ namespace doris {
 
 #define DS_SUCCESS(x) ((x) >= 0)
 
-OlapScanNode::OlapScanNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs):
-        ScanNode(pool, tnode, descs),
-        _tuple_id(tnode.olap_scan_node.tuple_id),
-        _olap_scan_node(tnode.olap_scan_node),
-        _tuple_desc(NULL),
-        _tuple_idx(0),
-        _eos(false),
-        _scanner_pool(new ObjectPool()),
-        _max_materialized_row_batches(config::doris_scanner_queue_size),
-        _start(false),
-        _scanner_done(false),
-        _transfer_done(false),
-        _status(Status::OK()),
-        _resource_info(nullptr),
-        _buffered_bytes(0),
-        _running_thread(0),
-        _eval_conjuncts_fn(nullptr) {
-}
+OlapScanNode::OlapScanNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs)
+        : ScanNode(pool, tnode, descs),
+          _tuple_id(tnode.olap_scan_node.tuple_id),
+          _olap_scan_node(tnode.olap_scan_node),
+          _tuple_desc(NULL),
+          _tuple_idx(0),
+          _eos(false),
+          _scanner_pool(new ObjectPool()),
+          _max_materialized_row_batches(config::doris_scanner_queue_size),
+          _start(false),
+          _scanner_done(false),
+          _transfer_done(false),
+          _status(Status::OK()),
+          _resource_info(nullptr),
+          _buffered_bytes(0),
+          _eval_conjuncts_fn(nullptr) {}
 
-OlapScanNode::~OlapScanNode() {
-}
+OlapScanNode::~OlapScanNode() {}
 
 Status OlapScanNode::init(const TPlanNode& tnode, RuntimeState* state) {
     RETURN_IF_ERROR(ExecNode::init(tnode, state));
@@ -1228,13 +1225,22 @@ void OlapScanNode::transfer_thread(RuntimeState* state) {
 
     state->resource_pool()->release_thread_token(true);
     VLOG(1) << "TransferThread finish.";
-    std::unique_lock<std::mutex> l(_row_batches_lock);
-    _transfer_done = true;
-    _row_batch_added_cv.notify_all();
+    {
+        std::unique_lock<std::mutex> l(_row_batches_lock);
+        _transfer_done = true;
+        _row_batch_added_cv.notify_all();
+    }
+
+    std::unique_lock<std::mutex> l(_scan_batches_lock);
+    _scan_thread_exit_cv.wait(l, [this] { return _running_thread == 0; });
+    VLOG(1) << "Scanner threads have been exited. TransferThread exit.";
 }
 
 void OlapScanNode::scanner_thread(OlapScanner* scanner) {
-    SCOPED_CPU_TIMER(_scan_cpu_timer);
+    // Do not use ScopedTimer. There is no guarantee that, the counter
+    // (_scan_cpu_timer, the class member) is not destroyed after `_running_thread==0`.
+    ThreadCpuStopWatch cpu_watch;
+    cpu_watch.start();
     Status status = Status::OK();
     bool eos = false;
     RuntimeState* state = scanner->runtime_state();
@@ -1323,7 +1329,6 @@ void OlapScanNode::scanner_thread(OlapScanner* scanner) {
         if (!eos) {
             _olap_scanners.push_front(scanner);
         }
-        _running_thread--;
     }
     if (eos) {
         // close out of batches lock. we do this before _progress update
@@ -1337,7 +1342,15 @@ void OlapScanNode::scanner_thread(OlapScanner* scanner) {
             _scanner_done = true;
         }
     }
+
+    _scan_cpu_timer->update(cpu_watch.elapsed_time());
     _scan_batch_added_cv.notify_one();
+
+    // The transfer thead will wait for `_running_thread==0`, to make sure all scanner threads won't access class members.
+    // Do not access class members after this code.
+    std::unique_lock<std::mutex> l(_scan_batches_lock);
+    _running_thread--;
+    _scan_thread_exit_cv.notify_one();
 }
 
 Status OlapScanNode::add_one_batch(RowBatchInterface* row_batch) {
