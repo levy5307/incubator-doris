@@ -7,7 +7,7 @@ cd $doris_home
 echo "### Compile and Pack Doris: $version ###"
 rm -rf output
 echo "### Start to Build for Doris Module"
-bash build.sh --be --fe --clean
+WITH_MYSQL=1 WITH_LZO=1 bash build.sh --be --fe --clean
 brokers=fs_brokers/apache_hdfs_broker/
 rm -rf $brokers/output
 echo "### Start to Build for Hdfs Broker Plugin ###"
