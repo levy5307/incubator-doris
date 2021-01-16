@@ -329,6 +329,12 @@ namespace config {
     CONF_mInt32(base_compaction_trace_threshold, "10");
     CONF_mInt32(cumulative_compaction_trace_threshold, "2");
 
+    // This config can be set to limit thread number in tablet migration thread pool.
+    CONF_Int32(min_tablet_migration_threads, "1");
+    CONF_Int32(max_tablet_migration_threads, "1");
+
+    CONF_mInt32(finished_migration_tasks_size, "10000");
+
     // Port to start debug webserver on
     CONF_Int32(webserver_port, "8040");
     // Number of webserver workers
