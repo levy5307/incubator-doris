@@ -1,0 +1,120 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+#include "testutil/function_utils.h"
+#include "udf_ga/funnel_count.h"
+#include <gtest/gtest.h>
+
+namespace doris {
+
+class FunnelCountTest : public testing::Test {
+public:
+    FunnelCountTest() = default;
+
+    void SetUp() {
+        utils = new FunctionUtils();
+        ctx = utils->get_fn_ctx();
+    }
+    void TearDown() { delete utils; }
+
+    FunctionUtils* utils;
+    FunctionContext* ctx;
+    StringVal dst_count;
+};
+
+TEST_F(FunnelCountTest, funnel_count_init) {
+    doris_udf::funnel_count_init(ctx, &dst_count);
+    EXPECT_FALSE(dst_count.is_null);
+    EXPECT_EQ(doris_udf::funnel_count_buffer_size, dst_count.len);
+    for (int i = 0; i < dst_count.len; ++i) {
+        uint8_t val = *((uint8_t*) (dst_count.ptr + i));
+        EXPECT_EQ(0, val);
+    }
+}
+
+TEST_F(FunnelCountTest, funnel_count_update) {
+    doris_udf::funnel_count_init(ctx, &dst_count);
+    StringVal funnel_info1;
+    short val1 = 111;
+    short val2 = -109;
+    funnel_info1.append(ctx, (uint8_t*)(&val1), sizeof(val1));
+    funnel_info1.append(ctx, (uint8_t*)(&val2), sizeof(val2));
+    doris_udf::funnel_count_update(ctx, funnel_info1, &dst_count);
+    unsigned int* dst_val1 = (unsigned int*)(dst_count.ptr + 2 * doris_udf::funnel_single_row_length + 11 * doris_udf::cell_size);
+    unsigned int* dst_val2 = (unsigned int*)(dst_count.ptr + 0 * doris_udf::funnel_single_row_length + 9 * doris_udf::cell_size);
+    EXPECT_EQ(1, *dst_val1);
+    EXPECT_EQ(1, *dst_val2);
+    StringVal funnel_info2;
+    short val3 = 111;
+    short val4 = -109;
+    short val5 = 110;
+    funnel_info2.append(ctx, (uint8_t*)(&val3), sizeof(val3));
+    funnel_info2.append(ctx, (uint8_t*)(&val4), sizeof(val4));
+    funnel_info2.append(ctx, (uint8_t*)(&val5), sizeof(val5));
+    doris_udf::funnel_count_update(ctx, funnel_info2, &dst_count);
+    unsigned int* dst_val3 = (unsigned int*)(dst_count.ptr + 2 * doris_udf::funnel_single_row_length + 10 * doris_udf::cell_size);
+    EXPECT_EQ(2, *dst_val1);
+    EXPECT_EQ(2, *dst_val2);
+    EXPECT_EQ(1, *dst_val3);
+}
+TEST_F(FunnelCountTest, funnel_count_merge) {
+    StringVal src_count;
+    doris_udf::funnel_count_init(ctx, &src_count);
+    unsigned int* src_val1 = (unsigned int*)(src_count.ptr + 2 * doris_udf::funnel_single_row_length + 11 * doris_udf::cell_size);
+    unsigned int* src_val2 = (unsigned int*)(src_count.ptr + 0 * doris_udf::funnel_single_row_length + 9 * doris_udf::cell_size);
+    *src_val1 = 2;
+    *src_val2 = 1;
+    doris_udf::funnel_count_init(ctx, &dst_count);
+    unsigned int* dst_val3 = (unsigned int*)(dst_count.ptr + 2 * doris_udf::funnel_single_row_length + 11 * doris_udf::cell_size);
+    unsigned int* dst_val4 = (unsigned int*)(dst_count.ptr + 0 * doris_udf::funnel_single_row_length + 9 * doris_udf::cell_size);
+    unsigned int* dst_val5 = (unsigned int*)(dst_count.ptr + 2 * doris_udf::funnel_single_row_length + 3 * doris_udf::cell_size);
+    *dst_val3 = 3;
+    *dst_val4 = 5;
+    *dst_val5 = 1;
+    doris_udf::funnel_count_merge(ctx, src_count, &dst_count);
+    EXPECT_EQ(5, *dst_val3);
+    EXPECT_EQ(6, *dst_val4);
+    EXPECT_EQ(1, *dst_val5);
+}
+TEST_F(FunnelCountTest, funnel_count_finalize) {
+    doris_udf::funnel_count_init(ctx, &dst_count);
+    unsigned int* dst_val3 = (unsigned int*)(dst_count.ptr + 0 * doris_udf::funnel_single_row_length + 0 * doris_udf::cell_size);
+    unsigned int* dst_val4 = (unsigned int*)(dst_count.ptr + 0 * doris_udf::funnel_single_row_length + 1 * doris_udf::cell_size);
+    unsigned int* dst_val5 = (unsigned int*)(dst_count.ptr + 0 * doris_udf::funnel_single_row_length + 2 * doris_udf::cell_size);
+    *dst_val3 = 5;
+    *dst_val4 = 4;
+    *dst_val5 = 3;
+    StringVal rs = doris_udf::funnel_count_finalize(ctx, dst_count);
+    EXPECT_EQ(StringVal("-1:1:5;-1:2:4;-1:3:3;"), rs);
+}
+
+TEST_F(FunnelCountTest, parse_row_column) {
+    int row = -1;
+    int column = -1;
+    doris_udf::parse_row_column(11, &row, &column);
+    EXPECT_EQ(0, row);
+    EXPECT_EQ(11, column);
+    doris_udf::parse_row_column(-109, &row, &column);
+    EXPECT_EQ(-1, row);
+    EXPECT_EQ(9, column);
+}
+}
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

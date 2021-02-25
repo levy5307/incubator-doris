@@ -4,45 +4,13 @@
 
 namespace doris_udf {
 
-int event_distinct_id = 0;
-
-void debug_stringval(string prefix, const StringVal& val, const StringVal& val1) {
-    string d_str;
-    for (int i = 0; i < val.len; i++) {
-        d_str += *(char*)(val.ptr + i);
-    }
-
-    string d_str1;
-    for (int i = 0; i < val1.len; i++) {
-        d_str1 += *(char*)(val1.ptr + i);
-    }
-}
-
-string debug_stringval(string prefix, const StringVal& val, bool display = true) {
-    string d_str;
-    for (int i = 0; i < val.len; i++) {
-        d_str += *(char*)(val.ptr + i);
-    }
-    return d_str;
-}
-
-string get_str_from_val(char* index, int length) {
-    string rst;
-    for (int i = 0; i < length; i++, index++) {
-        rst += *index;
-    }
-    return rst;
-}
-
-void parse(FunctionContext* context, const StringVal& aggInfoVal, FunnelInfoAgg& agg) {
-    agg.init();
+void parse(const StringVal& aggInfoVal, FunnelInfoAgg& agg) {
     if (aggInfoVal.len <= 0) return;
-    uint8_t* index = aggInfoVal.ptr + tag_size;
-
-    agg._time_window = *((int64_t*)index);
+    uint8_t* index = aggInfoVal.ptr;
+    agg._start_time = *((int64_t*)index);
     index += sizeof(int64_t);
 
-    agg._start_time = *((int64_t*)index);
+    agg._time_window = *((int64_t*)index);
     index += sizeof(int64_t);
 
     uint8_t* end_index = aggInfoVal.ptr + aggInfoVal.len;
@@ -53,185 +21,159 @@ void parse(FunctionContext* context, const StringVal& aggInfoVal, FunnelInfoAgg&
         int64_t event_time = *((int64_t*)index);
         index += sizeof(int64_t);
 
-        int32_t event_distinct_id = *((int32_t*)index);
-        index += sizeof(int32_t);
-        agg.add_event(step, event_time, event_distinct_id);
+        agg.add_event(step, event_time);
     }
 }
 
 short make_value_f(int row, int column) {
-    short rst = 0;
     if (row < 0) {
-        rst = (short)((-1) * ((-1 * row) * 100 + column));
+        return (short)((-1) * ((-1 * row) * 100 + column));
     } else {
-        rst = (short)(row * 100 + column);
+        return (short)(row * 100 + column);
     }
-    return rst;
 }
 
-void FunnelInfoAgg::trim(list<Event>& events, vector<Event>& rst) {
-    if (events.size() <= 0) {
+void FunnelInfoAgg::get_trim_events(vector<Event> &rst) {
+    if (_events.empty()) {
         return;
     }
-
-    list<Event>::iterator first = events.end();
-    list<Event>::iterator second = events.end();
-    int count = 0;
-    long day_of_start = 0l;
-    for (list<Event>::iterator iter = events.begin(); iter != events.end(); iter++) {
-        if (first == events.end()) {
+    _events.sort();
+    list<Event>::iterator first = _events.end();
+    list<Event>::iterator second = _events.end();
+    for (list<Event>::iterator iter = _events.begin(); iter != _events.end(); iter++) {
+        if (first == _events.end()) {
             first = iter;
-            first->_event_distinct_id = count++;
             rst.push_back(*first);
-            day_of_start = get_start_of_day(first->_ts);
-        } else if (second == events.end()) {
-            list<Event>::iterator tmp = iter;
-            if (tmp->_num == first->_num && day_of_start == get_start_of_day(tmp->_ts)) {
-                second = tmp;
+        } else if (second == _events.end()) {
+            if (iter->_step == first->_step && get_start_of_day(first->_ts) == get_start_of_day(iter->_ts)) {
+                second = iter;
             } else {
-                first = tmp;
-                first->_event_distinct_id = count++;
+                first = iter;
                 rst.push_back(*first);
-                day_of_start = get_start_of_day(first->_ts);
             }
         } else {
-            list<Event>::iterator tmp = iter;
-            if (tmp->_num == first->_num && day_of_start == get_start_of_day(tmp->_ts)) {
-                second = tmp;
+            if (iter->_step == first->_step && get_start_of_day(first->_ts) == get_start_of_day(iter->_ts)) {
+                second = iter;
             } else {
-                second->_event_distinct_id = count++;
                 rst.push_back(*second);
-                first = tmp;
-                first->_event_distinct_id = count++;
+                first = iter;
                 rst.push_back(*first);
-                second = events.end();
-                day_of_start = 0L;
+                second = _events.end();
             }
         }
     }
-
-    if (second != events.end()) {
-        second->_event_distinct_id = count++;
+    if (second != _events.end()) {
         rst.push_back(*second);
     }
 }
 
-StringVal FunnelInfoAgg::output(FunctionContext* context, StringVal* rst_str) {
-    _events.sort();
+StringVal FunnelInfoAgg::output(FunctionContext* context) {
 
-    // 2: trim events
+    // 1: trim events
     vector<Event> rst;
-    this->trim(_events, rst);
-
-    // 2.1: check events if exceeds max_event_count;
+    this->get_trim_events(rst);
+    // 2: check events if exceeds max_event_count;
     if (rst.size() > MAX_EVENT_COUNT) {
-        return *rst_str;
+        return StringVal();
     }
 
-    // 3: calc funnel metric & get distinct short encoded num
+    // 3: calc funnel metric
     unordered_set<short> cache;
     int event_count = rst.size();
     for (int i = 0; i < event_count; i++) {
         Event& first_event = rst[i];
-        if (first_event._num != 1) {
+        if (first_event._step != 0) {
             continue;
         }
-
-        int row =
-            (int)((get_start_of_day(first_event._ts) - get_start_of_day(_start_time)) / 86400000);
-        cache.insert(make_value_f(-1, 1));
-        cache.insert(make_value_f(row, 1));
-        int target_num = 2;
-        for (int c = 0; c < MAX_EVENT_COUNT; c++) {
-            old_ids[c] = 0;
-        }
-        old_ids[first_event._event_distinct_id] = 1;
-
+        int row = (int)((get_start_of_day(first_event._ts) - get_start_of_day(_start_time)) / 86400000);
+        cache.insert(make_value_f(-1, 0));
+        cache.insert(make_value_f(row, 0));
+        int target_num = 1;
         for (int j = i + 1; j < event_count; j++) {
             Event event = rst[j];
             long delta = event._ts - first_event._ts;
-            if (event._num == target_num && delta <= _time_window
-                && old_ids[event._event_distinct_id] == 0) {
+            if (event._step == target_num && delta <= _time_window) {
                 cache.insert(make_value_f(row, target_num));
                 cache.insert(make_value_f(-1, target_num));
-
                 target_num++;
-                old_ids[event._event_distinct_id] = 1;
             } else if (delta > _time_window) {
                 break;
             }
         }
     }
-
     // 4: make result
-    if (rst_str->len == 0) {
-        rst_str->is_null = false;
-        rst_str->ptr = context->allocate(tag_size);
-        rst_str->len = tag_size;
-        memcpy(rst_str->ptr, funnel_tag, tag_size);
-    }
-
+    StringVal rst_str;
+    const size_t buffer_size = cache.size() * 2;
+    uint8_t buffer[buffer_size];
+    int index = 0;
     for (unordered_set<short>::iterator iterator = cache.begin(); iterator != cache.end();
-         iterator++) {
-        short value = *iterator;
-        string encoded_str = encode((unsigned char*)&value, sizeof(short));
-        rst_str->append(context, (uint8_t*)(encoded_str.c_str()), encoded_str.length());
+         iterator++, index = index + 2) {
+        short* short_ptr = (short*) (buffer + index);
+        *(short*)short_ptr = *iterator;
     }
-
-    return *rst_str;
+    rst_str.append(context, buffer, buffer_size);
+    return rst_str;
 }
 
-void funnel_info_init(FunctionContext* context, StringVal* info_agg_val) {
-    info_agg_val->is_null = false;
-    info_agg_val->ptr = context->allocate(tag_size);
-    info_agg_val->len = tag_size;
-    memcpy(info_agg_val->ptr, funnel_tag, tag_size);
+void funnel_info_init(FunctionContext* context, StringVal* val) {
+    val->ptr = NULL;
+    val->is_null = false;
+    val->len = 0;
 }
 
-void funnel_info_update(FunctionContext* context, BigIntVal& from_time, BigIntVal& time_window,
-                        SmallIntVal& steps, BigIntVal& event_time, StringVal* info_agg_val) {
-    if (steps.val <= 0) {
-        return;
-    }
-
-    if (info_agg_val->len == 0) {
-        info_agg_val->append(context, (const uint8_t*)(&(time_window.val)), sizeof(int64_t));
-        info_agg_val->append(context, (const uint8_t*)(&(from_time.val)), sizeof(int64_t));
-    }
-
-    for (short i = 0; i < MAGIC_INT; i++) {
-        int target = 1 << i;
-        int r = target & steps.val;
-        if (target <= steps.val && r == target) {
-            uint8_t step = i + 1;
-            info_agg_val->append(context, (const uint8_t*)(&step), sizeof(uint8_t));
-            info_agg_val->append(context, (const uint8_t*)(&(event_time.val)), sizeof(int64_t));
-            info_agg_val->append(context, (const uint8_t*)(&(event_distinct_id)), sizeof(int32_t));
-        } else if (target > steps.val) {
-            break;
+uint8_t get_step(int16_t step_code) {
+    for (uint8_t i = 0; i < STEP_CODE_ARRAY_LENGTH; i++) {
+        if (step_code == STEP_CODE_ARRAY[i]) {
+            return i;
         }
     }
+    // should not happen
+    return 0;
+}
 
-    event_distinct_id++;
+void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, const BigIntVal& time_window,
+                        const SmallIntVal& steps, const BigIntVal& event_time, StringVal* info_agg_val) {
+    // we think it is unnormal user info when it exceeds 10M, only support 100 day
+    if (steps.val <= 0 || info_agg_val->len > 10485760 || event_time.val - from_time.val > max_funnel_support_interval) {
+        return;
+    }
+    if (steps.val <= MAX_STEP_CODE && steps.val > 0 && ((steps.val & (steps.val - 1)) == 0)) {
+        int buffer_size =  sizeof(uint8_t) + sizeof(int64_t);
+        if (info_agg_val->len == 0) {
+            buffer_size = buffer_size + funnel_info_init_length;
+        }
+        uint8_t buffer[buffer_size];
+        uint8_t* ptr_index = buffer;
+        if (info_agg_val->len == 0) {
+            *(int64_t*) ptr_index = from_time.val;
+            ptr_index = ptr_index + sizeof(int64_t);
+            *(int64_t*) ptr_index = time_window.val;
+            ptr_index = ptr_index + sizeof(int64_t);
+        }
+
+        uint8_t step = get_step(steps.val);
+        *(uint8_t*) ptr_index = step;
+        ptr_index = ptr_index + sizeof(uint8_t);
+        *(int64_t*) ptr_index = event_time.val;
+        info_agg_val->append(context, buffer, buffer_size);
+    }
 }
 
 // map side merge and reduce side merge
 void funnel_info_merge(FunctionContext* context, const StringVal& src_agginfo_val,
                        StringVal* dest_agginfo_val) {
-    int init_length = tag_size + 2 * sizeof(int64_t);
+
     if (dest_agginfo_val->len == 0) {
         dest_agginfo_val->append(context, src_agginfo_val.ptr, src_agginfo_val.len);
-    } else if (src_agginfo_val.len > init_length) {
-        dest_agginfo_val->append(context, src_agginfo_val.ptr + init_length,
-                                 src_agginfo_val.len - init_length);
+    } else if (src_agginfo_val.len > funnel_info_init_length) {
+        dest_agginfo_val->append(context, src_agginfo_val.ptr + funnel_info_init_length,
+                                 src_agginfo_val.len - funnel_info_init_length);
     }
 }
 
 StringVal funnel_info_finalize(FunctionContext* context, const StringVal& aggInfoVal) {
     FunnelInfoAgg finalAgg;
-    parse(context, aggInfoVal, finalAgg);
-    StringVal result;
-    finalAgg.output(context, &result);
-    return result;
+    parse(aggInfoVal, finalAgg);
+    return finalAgg.output(context);
 }
 }  // namespace doris_udf

@@ -124,6 +124,7 @@ cd ${DORIS_HOME}
 export DORIS_TEST_BINARY_DIR=${CMAKE_BUILD_DIR}
 export TERM=xterm
 export UDF_RUNTIME_DIR=${DORIS_HOME}/lib/udf-runtime
+export LD_LIBRARY_PATH=${CMAKE_BUILD_DIR}/src/udf_ga/
 export LOG_DIR=${DORIS_HOME}/log
 for i in `sed 's/ //g' $DORIS_HOME/conf/be.conf | egrep "^[[:upper:]]([[:upper:]]|_|[[:digit:]])*="`; do
     eval "export $i";

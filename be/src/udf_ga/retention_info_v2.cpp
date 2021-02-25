@@ -1,7 +1,7 @@
 #include "udf_ga/retention_info_v2.h"
 
 namespace doris_udf {
-void add_start_event(long start_time, const string& unit, long event_time, StringVal* agg_info) {
+void add_start_event(long start_time, const StringVal& unit, long event_time, StringVal* agg_info) {
     int idx = get_delta_periods(start_time, event_time, unit);
     if (idx >= 0 && idx < start_event_size) {
         auto start_event = reinterpret_cast<uint64_t*>(agg_info->ptr) + 1;
@@ -9,7 +9,7 @@ void add_start_event(long start_time, const string& unit, long event_time, Strin
     }
 }
 
-void add_end_event(long start_time, const string& unit, long event_time, StringVal* agg_info) {
+void add_end_event(long start_time, const StringVal& unit, long event_time, StringVal* agg_info) {
     int deltaPeriods = get_delta_periods(start_time, event_time, unit);
     if (deltaPeriods >= 0 && deltaPeriods < end_event_size * end_event_parts) {
         int part = deltaPeriods / end_event_size;

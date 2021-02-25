@@ -18,32 +18,27 @@ extern int event_distinct_id;
 namespace doris_udf {
 
 #define MAX_EVENT_COUNT 5000
-#define MAGIC_INT 32
-
-static const char funnel_tag[] = "";
-const int tag_size = 0;
-
-long get_start_of_day(long ts);
+#define MAX_STEP_CODE 1024
+const uint8_t STEP_CODE_ARRAY_LENGTH = 11;
+const int16_t STEP_CODE_ARRAY[STEP_CODE_ARRAY_LENGTH] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+const int funnel_info_init_length = 2 * sizeof(int64_t);
+const int64_t max_funnel_support_interval = 8726400000L;
+int64_t get_start_of_day(int64_t ts);
 
 struct Event {
-    short _num;
-    long _ts;
-    int _event_distinct_id;
-    Event(short num, long ts, int eventDistinctId)
-        : _num(num), _ts(ts), _event_distinct_id(eventDistinctId) {}
-    void init(short num, long ts, int eventDistinctId) {
-        _num = num;
-        _ts = ts;
-        _event_distinct_id = eventDistinctId;
-    }
+    uint8_t _step;
+    int64_t _ts;
+    Event(uint8_t step, int64_t ts)
+        : _step(step), _ts(ts) {
 
-    bool operator<(Event& other) {
+    }
+    bool operator < (Event& other) {
         if (_ts < other._ts) {
             return true;
         } else if (_ts == other._ts) {
-            if (_num >= other._num) {
+            if (_step >= other._step) {
                 return false;
-            } else if (_num < other._num) {
+            } else if (_step < other._step) {
                 return true;
             }
         } else {
@@ -54,59 +49,43 @@ struct Event {
 };
 
 struct FunnelInfoAgg {
-    int old_ids[MAX_EVENT_COUNT];
     list<Event> _events;
-    long _time_window;
-    long _start_time;
-    int _max_distinct_id;
+    int64_t _start_time;
+    int64_t _time_window;
 
-    FunnelInfoAgg() {
-        _time_window = 0L;
-        _start_time = 0L;
-        _max_distinct_id = 0;
-    }
-    void init() {
-        _time_window = 0;
-        _start_time = 0;
-        _max_distinct_id = 0;
-    }
+    FunnelInfoAgg(): _start_time(0L), _time_window(0L) {}
 
     void add_event(Event* e) {
         _events.push_back(*e);
-        if (e->_event_distinct_id > _max_distinct_id) {
-            _max_distinct_id = e->_event_distinct_id;
-        }
     }
 
-    void add_event(short num, long ts, int event_distinct_id) {
-        Event event(num, ts, event_distinct_id);
-        _events.push_back(event);
-        if (event_distinct_id > _max_distinct_id) {
-            _max_distinct_id = event_distinct_id;
-        }
+    void add_event(uint8_t step, int64_t ts) {
+        _events.emplace_back(step, ts);
     }
 
     list<Event> get_events() { return _events; }
 
-    void trim(list<Event>& events, vector<Event>& rst);
+    void get_trim_events(vector<Event>& rst);
 
-    StringVal output(FunctionContext* context, StringVal* rst);
+    StringVal output(FunctionContext* context);
 };
 
 short make_value_f(int row, int column);
 
 void funnel_info_init(FunctionContext* context, StringVal* funnelInfoAggVal);
-void funnel_info_update(FunctionContext* context, BigIntVal& from_time, IntVal& time_window,
-                        BigIntVal& steps, BigIntVal& event_time, StringVal* info_agg);
-void funnel_info_update(FunctionContext* context, BigIntVal& from_time, BigIntVal& time_window,
-                        BigIntVal& end_time1, BigIntVal& end_time2, BigIntVal& event_time,
-                        StringVal& events, StringVal& event_name, StringVal* info_agg_val);
+
+void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, const BigIntVal& time_window,
+                        const SmallIntVal& steps, const BigIntVal& event_time, StringVal* info_agg);
+
 void funnel_info_merge(FunctionContext* context, const StringVal& src_agginfo_val,
                        StringVal* dest_agginfo_val);
+
 StringVal funnel_info_finalize(FunctionContext* context, const StringVal& aggInfoVal);
 
 FunnelInfoAgg parse(FunctionContext* context, const StringVal& aggInfoVal);
-void parse(FunctionContext* context, const StringVal& aggInfoVal, FunnelInfoAgg& agg);
+
+void parse(const StringVal& aggInfoVal, FunnelInfoAgg& agg);
+
 }
 
 #endif

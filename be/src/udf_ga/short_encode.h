@@ -38,7 +38,7 @@ long decode(const char* data, size_t length);
 
 long get_start_of_day(long ts);
 long get_start_of_week(long ts);
-int get_delta_periods(long start_time, long event_time, string unit);
+int get_delta_periods(long start_time, long event_time, const StringVal& unit);
 /*
 void main() {
     short data = 5;

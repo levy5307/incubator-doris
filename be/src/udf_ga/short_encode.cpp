@@ -1,4 +1,5 @@
 #include <ctime>
+#include <udf/udf.h>
 
 #include "udf_ga/short_encode.h"
 
@@ -137,17 +138,20 @@ long get_start_of_day(long ts) {
 
 long get_start_of_week(long ts) {
     // 1900-01-01为星期四
-    long mod = (ts + UTC8 - 4 * 24 * 60 * 60 * 1000) % WEEK_TIME_MS;
+    long mod = (ts + UTC8 - 345600000) % WEEK_TIME_MS;
     return ts - mod;
 }
 
-int get_delta_periods(long start_time, long event_time, string unit) {
-    if (unit == "day") {
+int get_delta_periods(long start_time, long event_time, const StringVal& unit) {
+    if (unit.is_null || unit.len == 0) {
+        return -1;
+    }
+    if (*(char *)unit.ptr == 'd') {
         return (int)((get_start_of_day(event_time) - get_start_of_day(start_time)) / DAY_TIME_MS);
-    } else if (unit == "week") {
+    } else if (*(char *)unit.ptr == 'w') {
         return (int)((get_start_of_week(event_time) - get_start_of_week(start_time))
                      / WEEK_TIME_MS);
-    } else if (unit == "month") {
+    } else if (*(char *)unit.ptr == 'm') {
         start_time /= 1000;
         event_time /= 1000;
         std::tm start_tm = *localtime(&start_time);
