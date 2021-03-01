@@ -12,6 +12,7 @@
 #include "udf_ga/retention_common_v2.hpp"
 #include "udf_ga/short_encode.h"
 
+using namespace std;
 namespace doris_udf {
 struct RetentionInfoAgg {
     short retention_range;

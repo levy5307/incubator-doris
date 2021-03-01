@@ -2,7 +2,7 @@
 
 namespace doris_udf {
 void add_start_event(long start_time, const StringVal& unit, long event_time, StringVal* agg_info) {
-    int idx = get_delta_periods(start_time, event_time, unit);
+    int16_t idx = get_delta_periods(start_time, event_time, unit);
     if (idx >= 0 && idx < start_event_size) {
         auto start_event = reinterpret_cast<uint64_t*>(agg_info->ptr) + 1;
         (*start_event) |= (uint64_mask << (start_event_size - 1U - idx));
@@ -10,7 +10,7 @@ void add_start_event(long start_time, const StringVal& unit, long event_time, St
 }
 
 void add_end_event(long start_time, const StringVal& unit, long event_time, StringVal* agg_info) {
-    int deltaPeriods = get_delta_periods(start_time, event_time, unit);
+    int16_t deltaPeriods = get_delta_periods(start_time, event_time, unit);
     if (deltaPeriods >= 0 && deltaPeriods < end_event_size * end_event_parts) {
         int part = deltaPeriods / end_event_size;
         int idx = deltaPeriods % end_event_size;

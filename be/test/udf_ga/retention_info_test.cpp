@@ -49,18 +49,18 @@ void update_retention_info(FunctionContext* ctx, StringVal& dst_info) {
 
 TEST_F(RetentionInfoTest, retention_info_init) {
     doris_udf::retention_info_init(ctx, &dst_info);
-    EXPECT_EQ(809, dst_info.len);
+    EXPECT_EQ(doris_udf::kRetentionInfoBufferSize, dst_info.len);
     EXPECT_FALSE(dst_info.is_null);
 }
 
 TEST_F(RetentionInfoTest, retention_info_update) {
     doris_udf::retention_info_init(ctx, &dst_info);
     update_retention_info(ctx, dst_info);
-    int* time1 = (int*)(dst_info.ptr + 0 * sizeof(int));
-    int* time2 = (int*)(dst_info.ptr + (1 + array_size) * sizeof(int));
-    int* time3 = (int*)(dst_info.ptr + (2 + array_size) * sizeof(int));
-    int* time4 = (int*)(dst_info.ptr + 3 * sizeof(int));
-    int* time5 = (int*)(dst_info.ptr + (3 + array_size) * sizeof(int));
+    int32_t* time1 = (int32_t*)(dst_info.ptr + 0 * sizeof(int32_t));
+    int32_t* time2 = (int32_t*)(dst_info.ptr + (1 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
+    int32_t* time3 = (int32_t*)(dst_info.ptr + (2 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
+    int32_t* time4 = (int32_t*)(dst_info.ptr + 3 * sizeof(int32_t));
+    int32_t* time5 = (int32_t*)(dst_info.ptr + (3 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
     EXPECT_EQ(1614047612L, *time1);
     EXPECT_EQ(1614134012L, *time2);
     EXPECT_EQ(1614220412L, *time3);
@@ -79,13 +79,13 @@ TEST_F(RetentionInfoTest, retention_info_merge) {
     doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614394510000L), IntVal(2), &dst_info);
     doris_udf::retention_info_merge(ctx, src_info, &dst_info);
 
-    int* time1 = (int*)(dst_info.ptr + 0 * sizeof(int));
-    int* time2 = (int*)(dst_info.ptr + (1 + array_size) * sizeof(int));
-    int* time3 = (int*)(dst_info.ptr + (2 + array_size) * sizeof(int));
-    int* time4 = (int*)(dst_info.ptr + 3 * sizeof(int));
-    int* time5 = (int*)(dst_info.ptr + (3 + array_size) * sizeof(int));
-    int* time6 = (int*)(dst_info.ptr + 4 * sizeof(int));
-    int* time7 = (int*)(dst_info.ptr + (4 + array_size) * sizeof(int));
+    int32_t* time1 = (int32_t*)(dst_info.ptr + 0 * sizeof(int32_t));
+    int32_t* time2 = (int32_t*)(dst_info.ptr + (1 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
+    int32_t* time3 = (int32_t*)(dst_info.ptr + (2 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
+    int32_t* time4 = (int32_t*)(dst_info.ptr + 3 * sizeof(int32_t));
+    int32_t* time5 = (int32_t*)(dst_info.ptr + (3 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
+    int32_t* time6 = (int32_t*)(dst_info.ptr + 4 * sizeof(int32_t));
+    int32_t* time7 = (int32_t*)(dst_info.ptr + (4 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
     EXPECT_EQ(1614047612L, *time1);
     EXPECT_EQ(1614134012L, *time2);
     EXPECT_EQ(1614220412L, *time3);
@@ -100,12 +100,20 @@ TEST_F(RetentionInfoTest, retention_info_finalize) {
     update_retention_info(ctx, dst_info);
     StringVal rs = doris_udf::retention_info_finalize(ctx, dst_info);
     EXPECT_EQ(12, rs.len);
-    EXPECT_EQ(-301, *((short *)(rs.ptr + 0)));
-    EXPECT_EQ(-1, *((short *)(rs.ptr + 2)));
-    EXPECT_EQ(1, *((short *)(rs.ptr + 4)));
-    EXPECT_EQ(2, *((short *)(rs.ptr + 6)));
-    EXPECT_EQ(3, *((short *)(rs.ptr + 8)));
-    EXPECT_EQ(300, *((short *)(rs.ptr + 10)));
+    EXPECT_EQ(-385, *((int16_t*)(rs.ptr + 0)));
+    EXPECT_EQ(-1, *((int16_t*)(rs.ptr + 2)));
+    EXPECT_EQ(1, *((int16_t*)(rs.ptr + 4)));
+    EXPECT_EQ(2, *((int16_t*)(rs.ptr + 6)));
+    EXPECT_EQ(3, *((int16_t*)(rs.ptr + 8)));
+    EXPECT_EQ(384, *((int16_t*)(rs.ptr + 10)));
+}
+
+TEST_F(RetentionInfoTest, make_value_benckmark) {
+    for (int16_t i = 0; i < 1000; ++i) {
+        for (int v = -1; v <= std::numeric_limits<int16_t>::max(); ++v) {
+            doris_udf::make_value(v, i);
+        }
+    }
 }
 
 }

@@ -1,40 +1,26 @@
 #pragma once
 
-#ifndef DORIS_BE_UDF_UDA_RETENTION_COUNT
-#define DORIS_BE_UDF_UDA_RETENTION_COUNT
-
 #include "udf/udf.h"
-#include "udf_ga/short_encode.h"
-#include <iostream>
-#include <list>
+
 #include <set>
-#include <string.h>
-#include <unordered_map>
-#include <vector>
-
-#include "common/logging.h"
-
-using namespace std;
 
 namespace doris_udf {
 
-const int retention_row_size = 101;
-const int retention_column_size = 102;
-const int single_row_length = 102 * 8;
-const int retention_count_buffer_size = retention_row_size * single_row_length;
+static const uint8_t kRowColShift = 7;
+static const uint8_t kRowColMask = (1 << kRowColShift) - 1;
 
-struct RetentionCountAgg {
-    unordered_map<short, long> _result_map;
-};
+static const uint8_t kRetentionCellSize = sizeof(uint32_t);
+static const uint8_t kRetentionRowCount = 101;
+static const uint8_t kRetentionColumnCount = kRetentionRowCount + 1;  // TODO(yingchun): ?
+static const uint16_t kRetentionSingleRowSize = kRetentionColumnCount * kRetentionCellSize;
+static const uint32_t kRetentionCountBufferSize = kRetentionRowCount * kRetentionSingleRowSize;
 
-inline void parse_row_column(int v, int* row, int* column);
+void parse_retention_row_column(int16_t v, int16_t* row, int16_t* column);
+void parse_from_retention_info(const StringVal* val, std::set<int16_t>* local);
+
 void retention_count_init(FunctionContext* context, StringVal* val);
 void retention_count_update(FunctionContext* context, const StringVal& info, StringVal* count_agg);
 void retention_count_merge(FunctionContext* context, const StringVal& src_agg_count,
                            StringVal* dst_agg_count);
-inline void parse_retention_row_column(int v, int* row, int* column);
 StringVal retention_count_finalize(FunctionContext* context, const StringVal& agg_count);
-short make_value_r(int row, int column);
-}
-
-#endif
+}  // namespace doris_udf
