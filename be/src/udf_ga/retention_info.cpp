@@ -3,11 +3,14 @@
 #include <set>
 
 #include "common/compiler_util.h"
+#include "common/logging.h"
 #include "udf_ga/retention_count.h"
 
 namespace doris_udf {
 
 void add_first_event(int16_t index, uint32_t event_time, StringVal* info_agg) {
+    DCHECK(info_agg);
+    DCHECK_LT(index, kRetentionEventCount);
     uint32_t& ts = *(uint32_t*)(info_agg->ptr + index * kRetentionEventCellSize);
     if (ts == 0 || ts > event_time) {
         ts = event_time;
@@ -15,6 +18,8 @@ void add_first_event(int16_t index, uint32_t event_time, StringVal* info_agg) {
 }
 
 void add_second_event(int16_t index, uint32_t event_time, StringVal* info_agg) {
+    DCHECK(info_agg);
+    DCHECK_LT(index, kRetentionEventCount);
     uint32_t& ts = *(uint32_t*)(info_agg->ptr + (index + kRetentionEventCount) * kRetentionEventCellSize);
     if (ts == 0 || ts < event_time) {
         ts = event_time;
@@ -22,16 +27,21 @@ void add_second_event(int16_t index, uint32_t event_time, StringVal* info_agg) {
 }
 
 void set_same_event(StringVal* info_agg) {
+    DCHECK(info_agg);
     *(bool*)(info_agg->ptr + kSameEventIndex) = true;
 }
 
 void retention_info_init(FunctionContext* context, StringVal* info_val) {
+    DCHECK(context);
+    DCHECK(info_val);
     *info_val = StringVal(context, kRetentionInfoBufferSize);
     memset(info_val->ptr, 0, kRetentionInfoBufferSize);
 }
 
 void retention_info_update(FunctionContext* context, const BigIntVal& start_time, const StringVal& unit,
                            const BigIntVal& event_time, const IntVal& type, StringVal* info_agg) {
+    DCHECK(context);
+    DCHECK(info_agg);
     if (0 == type.val) {
         return;
     }
@@ -63,6 +73,8 @@ void retention_info_update(FunctionContext* context, const BigIntVal& start_time
 
 void retention_info_merge(FunctionContext* context, const StringVal& src_agg_info,
                           StringVal* dst_agg_info) {
+    DCHECK(context);
+    DCHECK(dst_agg_info);
     if (src_agg_info.len == 0) {
         return;
     }
@@ -94,17 +106,9 @@ void retention_info_merge(FunctionContext* context, const StringVal& src_agg_inf
     }
 }
 
-// column maybe negative value
-int16_t make_value(int16_t row, int16_t column) {
-    if (UNLIKELY(column < 0)) {
-        return -(row << kRowColShift) + column;
-    } else {
-        return (row << kRowColShift) + column;
-    }
-}
-
 StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg_info) {
-    int16_t row_max_index = kRetentionEventCount - 1;
+    DCHECK(context);
+    uint8_t row_max_index = kRetentionEventCount - 1;
     for (; row_max_index >= 0; row_max_index--) {
         uint32_t ts = *(uint32_t*)(agg_info.ptr + row_max_index * kRetentionEventCellSize);
         if (ts != 0) {
@@ -112,7 +116,7 @@ StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg
         }
     }
 
-    int16_t column_max_index = kRetentionEventCount - 1;
+    uint8_t column_max_index = kRetentionEventCount - 1;
     for (; column_max_index >= 0; column_max_index--) {
         uint32_t ts = *(uint32_t*)(agg_info.ptr + (column_max_index + kRetentionEventCount) * kRetentionEventCellSize);
         if (ts != 0) {
@@ -120,24 +124,24 @@ StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg
         }
     }
 
-    std::set<int16_t> local_set;
+    std::set<uint16_t> local_set;
     bool same_event = *(bool*)(agg_info.ptr + kSameEventIndex);
-    for (int16_t row = 0; row <= row_max_index; row++) {
+    for (uint8_t row = 0; row <= row_max_index; row++) {
         uint32_t first_ts = *(uint32_t*)(agg_info.ptr + row * kRetentionEventCellSize);
-        if (first_ts <= 0) {
+        if (first_ts == 0) {
             continue;
         }
 
-        local_set.insert(make_value(row, -1));
+        local_set.insert(encode_row_col(row, 0));
 
         if (same_event) {
-            local_set.insert(make_value(row, 0));
+            local_set.insert(encode_row_col(row, 1));
         }
 
-        for (int16_t column = row; column <= column_max_index; column++) {
+        for (uint8_t column = row; column <= column_max_index; column++) {
             uint32_t second_ts = *(uint32_t*)(agg_info.ptr + (column + kRetentionEventCount) * kRetentionEventCellSize);
             if (second_ts > first_ts) {
-                local_set.insert(make_value(row, column - row));
+                local_set.insert(encode_row_col(row, column - row + 1));
             }
         }
     }
@@ -146,7 +150,7 @@ StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg
     StringVal rst(context, buffer_size);
     memset(rst.ptr, 0, buffer_size);
 
-    int16_t* ptr = (int16_t*)(rst.ptr);
+    uint16_t* ptr = (uint16_t*)(rst.ptr);
     for (const auto& iter : local_set) {
         *ptr = iter;
         ++ptr;

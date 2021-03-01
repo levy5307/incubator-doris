@@ -11,7 +11,7 @@ namespace doris_udf {
 static const uint16_t kMaxEventCount = 5000;
 static const uint16_t kMaxStep = 1024;
 static const uint32_t kMaxFunnelInfoSize = 10 << 20;
-static const uint8_t kFunnelInfoBufferSize = 2 * sizeof(int64_t);
+static const uint8_t kFunnelInfoHeaderSize = 2 * sizeof(int64_t);
 static const uint32_t kMaxFunnelSupportInterval = kFunnelRowCount * 86400;
 
 struct Event {
@@ -54,7 +54,6 @@ struct FunnelInfoAgg {
 
 uint8_t get_step(int16_t step_code);
 void parse(const StringVal& aggInfoVal, FunnelInfoAgg& agg);
-int16_t make_value_f(int16_t row, int16_t column);
 
 void funnel_info_init(FunctionContext* context, StringVal* funnelInfoAggVal);
 void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, const BigIntVal& time_window,

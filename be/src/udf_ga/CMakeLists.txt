@@ -23,6 +23,7 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/udf_ga")
 
 find_package(Boost 1.64.0 REQUIRED COMPONENTS serialization system)
 
+add_library(short_encode short_encode.cpp)
 add_library(firstTime SHARED first_time_value.cpp)
 add_library(hash64 SHARED udf_hash64.cpp udf_xxhash64.cpp)
 add_library(retention SHARED retention_info.cpp retention_count.cpp short_encode.cpp)

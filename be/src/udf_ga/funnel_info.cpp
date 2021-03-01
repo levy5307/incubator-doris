@@ -6,7 +6,7 @@
 #include <unordered_set>
 
 #include "common/compiler_util.h"
-#include "udf_ga/funnel_count.h"
+#include "common/logging.h"
 #include "udf_ga/short_encode.h"
 
 using namespace std;
@@ -25,6 +25,7 @@ void parse(const StringVal& aggInfoVal, FunnelInfoAgg& agg) {
     agg._time_window = *((int64_t*)index) / 1000;
     index += sizeof(int64_t);
 
+    agg._events.clear();
     uint8_t* end_index = aggInfoVal.ptr + aggInfoVal.len;
     while (index < end_index) {
         uint8_t step = *(uint8_t*)index;
@@ -34,14 +35,6 @@ void parse(const StringVal& aggInfoVal, FunnelInfoAgg& agg) {
         index += sizeof(int64_t);
 
         agg.add_event(step, event_time);
-    }
-}
-
-int16_t make_value_f(int16_t row, int16_t column) {
-    if (UNLIKELY(row < 0)) {
-        return (row << kRowColShift) - column;
-    } else {
-        return (row << kRowColShift) + column;
     }
 }
 
@@ -114,9 +107,13 @@ StringVal FunnelInfoAgg::output(FunctionContext* context) {
         if (first_event._step != 0) {
             continue;
         }
-        int16_t row = (int16_t)((get_start_of_day(first_event._ts) - _start_of_day) / DAY_TIME_SEC);
-        cache.insert(make_value_f(-1, 0));
-        cache.insert(make_value_f(row, 0));
+        // TODO(yingchun): why always day? how about week, month?
+        int16_t row = (get_start_of_day(first_event._ts) - _start_of_day) / DAY_TIME_SEC;
+        if (row < 0 || row > kFunnelRowCount) {
+            continue;
+        }
+        cache.insert(encode_row_col(0, 0));
+        cache.insert(encode_row_col(row + 1, 0));
         int16_t target_step = 1;
         for (int j = i + 1; j < event_count; j++) {
             const Event& event = rst[j];
@@ -127,8 +124,8 @@ StringVal FunnelInfoAgg::output(FunctionContext* context) {
                 continue;
             }
 
-            cache.insert(make_value_f(row, target_step));
-            cache.insert(make_value_f(-1, target_step));
+            cache.insert(encode_row_col(row + 1, target_step));
+            cache.insert(encode_row_col(0, target_step));
             ++target_step;
         }
     }
@@ -148,6 +145,8 @@ StringVal FunnelInfoAgg::output(FunctionContext* context) {
 }
 
 void funnel_info_init(FunctionContext* context, StringVal* val) {
+    DCHECK(context);
+    DCHECK(val);
     val->ptr = nullptr;
     val->is_null = false;
     val->len = 0;
@@ -159,6 +158,8 @@ uint8_t get_step(int16_t step_code) {
 
 void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, const BigIntVal& time_window,
                         const SmallIntVal& steps, const BigIntVal& event_time, StringVal* info_agg_val) {
+    DCHECK(context);
+    DCHECK(info_agg_val);
     // we think it is unnormal user info when it exceeds 10M, only support 100 days
     if (UNLIKELY(info_agg_val->len > kMaxFunnelInfoSize ||
         (steps.val <= 0 || steps.val > kMaxStep) ||
@@ -169,7 +170,7 @@ void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, co
 
     int buffer_size =  sizeof(uint8_t) + sizeof(int64_t);
     if (info_agg_val->len == 0) {
-        buffer_size += kFunnelInfoBufferSize;
+        buffer_size += kFunnelInfoHeaderSize;
     }
     uint8_t buffer[buffer_size] = {0};
     uint8_t* pbuffer = buffer;
@@ -181,7 +182,7 @@ void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, co
         *funnel_info = time_window.val;
         ++funnel_info;
 
-        pbuffer += (sizeof(int64_t) * 2);
+        pbuffer += kFunnelInfoHeaderSize;
     }
 
     *pbuffer = get_step(steps.val);
@@ -194,15 +195,18 @@ void funnel_info_update(FunctionContext* context, const BigIntVal& from_time, co
 // map side merge and reduce side merge
 void funnel_info_merge(FunctionContext* context, const StringVal& src_agginfo_val,
                        StringVal* dest_agginfo_val) {
+    DCHECK(context);
+    DCHECK(dest_agginfo_val);
     if (dest_agginfo_val->len == 0) {
         dest_agginfo_val->append(context, src_agginfo_val.ptr, src_agginfo_val.len);
-    } else if (src_agginfo_val.len > kFunnelInfoBufferSize) {
-        dest_agginfo_val->append(context, src_agginfo_val.ptr + kFunnelInfoBufferSize,
-                                 src_agginfo_val.len - kFunnelInfoBufferSize);
+    } else if (src_agginfo_val.len > kFunnelInfoHeaderSize) {
+        dest_agginfo_val->append(context, src_agginfo_val.ptr + kFunnelInfoHeaderSize,
+                                 src_agginfo_val.len - kFunnelInfoHeaderSize);
     }
 }
 
 StringVal funnel_info_finalize(FunctionContext* context, const StringVal& aggInfoVal) {
+    DCHECK(context);
     FunnelInfoAgg finalAgg;
     parse(aggInfoVal, finalAgg);
     return finalAgg.output(context);

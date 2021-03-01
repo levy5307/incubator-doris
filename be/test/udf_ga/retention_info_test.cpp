@@ -21,6 +21,10 @@
 
 namespace doris {
 
+using namespace doris_udf;
+
+static const int64_t ts = 1614047612;
+
 class RetentionInfoTest : public testing::Test {
 public:
     RetentionInfoTest() = default;
@@ -32,87 +36,241 @@ public:
 
     void TearDown() { delete utils; }
 
-    FunctionUtils *utils;
-    FunctionContext *ctx;
+    void update_retention_info(FunctionContext* ctx, int event_type, const char* unit,
+                               const std::vector<int64_t> intervals,
+                               const std::vector<int64_t> offsets,
+                               StringVal* dst) {
+        ASSERT_EQ(intervals.size(), offsets.size());
+        BigIntVal start_time(ts * 1000);
+        for (int i = 0; i < intervals.size(); ++i) {
+            retention_info_update(ctx, start_time, StringVal(unit),
+                                  BigIntVal((ts + intervals[i] * 86400 + offsets[i]) * 1000), IntVal(event_type),
+                                  dst);
+        }
+    }
+
+    FunctionUtils* utils = nullptr;
+    FunctionContext* ctx = nullptr;
     StringVal dst_info;
 };
 
-void update_retention_info(FunctionContext* ctx, StringVal& dst_info) {
-    BigIntVal start_time(1614047612820L);
-    StringVal unit("day");
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614047612820L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614134012000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614220412000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614306812000L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614307112000L), IntVal(2), &dst_info);
+void check_empty_data(const StringVal& dst_info) {
+    ASSERT_FALSE(dst_info.is_null);
+    ASSERT_NE(dst_info.ptr, nullptr);
+    ASSERT_EQ(kRetentionInfoBufferSize, dst_info.len);
+    for (int i = 0; i < kRetentionInfoBufferSize; ++i) {
+        ASSERT_EQ(0, *(dst_info.ptr + i));
+    }
+}
+
+TEST_F(RetentionInfoTest, add_first_event) {
+    retention_info_init(ctx, &dst_info);
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        add_first_event(index, ts + index, &dst_info);
+    }
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        ASSERT_EQ(ts + index, *(uint32_t*)(dst_info.ptr + index * kRetentionEventCellSize)) << index;;
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + (index + kRetentionEventCount) * kRetentionEventCellSize));
+    }
+    ASSERT_FALSE(*(bool*)(dst_info.ptr + kSameEventIndex));
+}
+
+TEST_F(RetentionInfoTest, add_second_event) {
+    retention_info_init(ctx, &dst_info);
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        add_second_event(index, ts - index, &dst_info);
+    }
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + index * kRetentionEventCellSize));
+        ASSERT_EQ(ts - index, *(uint32_t*)(dst_info.ptr + (index + kRetentionEventCount) * kRetentionEventCellSize));
+    }
+    ASSERT_FALSE(*(bool*)(dst_info.ptr + kSameEventIndex));
+}
+
+TEST_F(RetentionInfoTest, add_events) {
+    retention_info_init(ctx, &dst_info);
+    set_same_event(&dst_info);
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        add_first_event(index, ts + index, &dst_info);
+        add_second_event(index, ts - index, &dst_info);
+    }
+    for (int16_t index = 0; index < kRetentionEventCount; ++index) {
+        ASSERT_EQ(ts + index, *(uint32_t*)(dst_info.ptr + index * kRetentionEventCellSize));
+        ASSERT_EQ(ts - index, *(uint32_t*)(dst_info.ptr + (index + kRetentionEventCount) * kRetentionEventCellSize));
+    }
+    ASSERT_TRUE(*(bool*)(dst_info.ptr + kSameEventIndex));
 }
 
 TEST_F(RetentionInfoTest, retention_info_init) {
-    doris_udf::retention_info_init(ctx, &dst_info);
-    EXPECT_EQ(doris_udf::kRetentionInfoBufferSize, dst_info.len);
-    EXPECT_FALSE(dst_info.is_null);
+    retention_info_init(ctx, &dst_info);
+    check_empty_data(dst_info);
 }
 
-TEST_F(RetentionInfoTest, retention_info_update) {
-    doris_udf::retention_info_init(ctx, &dst_info);
-    update_retention_info(ctx, dst_info);
-    int32_t* time1 = (int32_t*)(dst_info.ptr + 0 * sizeof(int32_t));
-    int32_t* time2 = (int32_t*)(dst_info.ptr + (1 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    int32_t* time3 = (int32_t*)(dst_info.ptr + (2 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    int32_t* time4 = (int32_t*)(dst_info.ptr + 3 * sizeof(int32_t));
-    int32_t* time5 = (int32_t*)(dst_info.ptr + (3 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    EXPECT_EQ(1614047612L, *time1);
-    EXPECT_EQ(1614134012L, *time2);
-    EXPECT_EQ(1614220412L, *time3);
-    EXPECT_EQ(1614306812L, *time4);
-    EXPECT_EQ(1614307112L, *time5);
-}
-
-TEST_F(RetentionInfoTest, retention_info_merge) {
-    doris_udf::retention_info_init(ctx, &dst_info);
-    update_retention_info(ctx, dst_info);
-    StringVal src_info;
-    doris_udf::retention_info_init(ctx, &src_info);
-    BigIntVal start_time(1614047612820L);
+TEST_F(RetentionInfoTest, retention_info_update_invalid) {
+    retention_info_init(ctx, &dst_info);
+    BigIntVal start_time(ts);
     StringVal unit("day");
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614393512000L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614394510000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_merge(ctx, src_info, &dst_info);
 
-    int32_t* time1 = (int32_t*)(dst_info.ptr + 0 * sizeof(int32_t));
-    int32_t* time2 = (int32_t*)(dst_info.ptr + (1 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    int32_t* time3 = (int32_t*)(dst_info.ptr + (2 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    int32_t* time4 = (int32_t*)(dst_info.ptr + 3 * sizeof(int32_t));
-    int32_t* time5 = (int32_t*)(dst_info.ptr + (3 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    int32_t* time6 = (int32_t*)(dst_info.ptr + 4 * sizeof(int32_t));
-    int32_t* time7 = (int32_t*)(dst_info.ptr + (4 + doris_udf::kRetentionEventCount) * sizeof(int32_t));
-    EXPECT_EQ(1614047612L, *time1);
-    EXPECT_EQ(1614134012L, *time2);
-    EXPECT_EQ(1614220412L, *time3);
-    EXPECT_EQ(1614306812L, *time4);
-    EXPECT_EQ(1614307112L, *time5);
-    EXPECT_EQ(1614393512L, *time6);
-    EXPECT_EQ(1614394510L, *time7);
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000), IntVal(0), &dst_info);
+    check_empty_data(dst_info);
+
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000), IntVal(4), &dst_info);
+    check_empty_data(dst_info);
+
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000 - 86400 * 1000), IntVal(0), &dst_info);
+    check_empty_data(dst_info);
+
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000 + (int64_t)kRetentionEventCount * 86400 * 1000), IntVal(0), &dst_info);
+    check_empty_data(dst_info);
+}
+
+TEST_F(RetentionInfoTest, retention_info_update_simple) {
+    BigIntVal start_time(ts * 1000);
+    StringVal unit("day");
+
+    retention_info_init(ctx, &dst_info);
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000), IntVal(1), &dst_info);
+    ASSERT_EQ(ts, *(uint32_t*)(dst_info.ptr + 0 * kRetentionEventCellSize));
+
+    retention_info_init(ctx, &dst_info);
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000), IntVal(2), &dst_info);
+    ASSERT_EQ(ts, *(uint32_t*)(dst_info.ptr + (0 + kRetentionEventCount) * kRetentionEventCellSize));
+
+    retention_info_init(ctx, &dst_info);
+    retention_info_update(ctx, start_time, unit, BigIntVal(ts * 1000 + 1 * 86400 * 1000), IntVal(3), &dst_info);
+    ASSERT_EQ(ts + 1 * 86400, *(uint32_t*)(dst_info.ptr + 1 * kRetentionEventCellSize));
+    ASSERT_EQ(ts + 1 * 86400, *(uint32_t*)(dst_info.ptr + (1 + kRetentionEventCount) * kRetentionEventCellSize));
+    ASSERT_TRUE(*(bool*)(dst_info.ptr + kSameEventIndex));
+}
+
+TEST_F(RetentionInfoTest, retention_info_update_more) {
+    BigIntVal start_time(ts * 1000);
+    StringVal unit("day");
+
+    for (int event_type = 1; event_type <= 3; ++event_type) {
+        retention_info_init(ctx, &dst_info);
+        // update data
+        for (int64_t i = 0; i < kRetentionEventCount; ++i) {
+            retention_info_update(ctx, start_time, unit,
+                                  BigIntVal(ts * 1000 + i * 86400 * 1000),
+                                  IntVal(event_type), &dst_info);
+        }
+
+        // check value
+        for (int i = 0; i < kRetentionEventCount; ++i) {
+            uint32_t first_ts = 0, second_ts = 0;
+            bool same_event = false;
+            if (event_type == 1) {
+                first_ts = ts + i * 86400;
+            } else if (event_type == 2) {
+                second_ts = ts + i * 86400;
+            } else {
+                first_ts = ts + i * 86400;
+                second_ts = ts + i * 86400;
+                same_event = true;
+            }
+            ASSERT_EQ(first_ts, *(uint32_t*)(dst_info.ptr + i * kRetentionEventCellSize)) << event_type << " " << i << std::endl;
+            ASSERT_EQ(second_ts, *(uint32_t*)(dst_info.ptr + (i + kRetentionEventCount) * kRetentionEventCellSize));
+            ASSERT_EQ(same_event, *(bool*)(dst_info.ptr + kSameEventIndex));
+        }
+    }
+}
+
+TEST_F(RetentionInfoTest, retention_info_merge_simple) {
+    {
+        StringVal src_info;
+        retention_info_init(ctx, &src_info);
+        retention_info_init(ctx, &dst_info);
+        update_retention_info(ctx, 1, "day", {1, 2, 3, 4}, {0, 100, 200, 300}, &dst_info);
+        update_retention_info(ctx, 1, "day", {2, 3, 4, 5}, {-100, 200, 400, 0}, &src_info);
+        retention_info_merge(ctx, src_info, &dst_info);
+
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + 0 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 1 * 86400, *(uint32_t*)(dst_info.ptr + 1 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 2 * 86400 - 100, *(uint32_t*)(dst_info.ptr + 2 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 3 * 86400 + 200, *(uint32_t*)(dst_info.ptr + 3 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 4 * 86400 + 300, *(uint32_t*)(dst_info.ptr + 4 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 5 * 86400, *(uint32_t*)(dst_info.ptr + 5 * kRetentionEventCellSize));
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + 6 * kRetentionEventCellSize));
+    }
+
+    {
+        StringVal src_info;
+        retention_info_init(ctx, &src_info);
+        retention_info_init(ctx, &dst_info);
+        update_retention_info(ctx, 2, "day", {1, 2, 3, 4}, {0, 100, 200, 300}, &dst_info);
+        update_retention_info(ctx, 2, "day", {2, 3, 4, 5}, {-100, 200, 400, 0}, &src_info);
+        retention_info_merge(ctx, src_info, &dst_info);
+
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + (0 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 1 * 86400, *(uint32_t*)(dst_info.ptr + (1 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 2 * 86400 + 100, *(uint32_t*)(dst_info.ptr + (2 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 3 * 86400 + 200, *(uint32_t*)(dst_info.ptr + (3 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 4 * 86400 + 400, *(uint32_t*)(dst_info.ptr + (4 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 5 * 86400, *(uint32_t*)(dst_info.ptr + (5 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + (6 + kRetentionEventCount) * kRetentionEventCellSize));
+    }
+
+    {
+        retention_info_init(ctx, &dst_info);
+        {
+            StringVal src_info;
+            retention_info_init(ctx, &src_info);
+            update_retention_info(ctx, 1, "day", {1, 2, 3, 4}, {0, 100, 200, 300}, &dst_info);
+            update_retention_info(ctx, 1, "day", {2, 3, 4, 5}, {-100, 200, 400, 0}, &src_info);
+            retention_info_merge(ctx, src_info, &dst_info);
+        }
+        {
+            StringVal src_info;
+            retention_info_init(ctx, &src_info);
+            update_retention_info(ctx, 2, "day", {1, 2, 3, 4}, {0, 100, 200, 300}, &dst_info);
+            update_retention_info(ctx, 2, "day", {2, 3, 4, 5}, {-100, 200, 400, 0}, &src_info);
+            retention_info_merge(ctx, src_info, &dst_info);
+        }
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + 0 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 1 * 86400 , *(uint32_t*)(dst_info.ptr + 1 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 2 * 86400  - 100, *(uint32_t*)(dst_info.ptr + 2 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 3 * 86400  + 200, *(uint32_t*)(dst_info.ptr + 3 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 4 * 86400  + 300, *(uint32_t*)(dst_info.ptr + 4 * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 5 * 86400 , *(uint32_t*)(dst_info.ptr + 5 * kRetentionEventCellSize));
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + 6 * kRetentionEventCellSize));
+
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + (0 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 1 * 86400, *(uint32_t*)(dst_info.ptr + (1 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 2 * 86400 + 100, *(uint32_t*)(dst_info.ptr + (2 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 3 * 86400 + 200, *(uint32_t*)(dst_info.ptr + (3 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 4 * 86400 + 400, *(uint32_t*)(dst_info.ptr + (4 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(ts + 5 * 86400, *(uint32_t*)(dst_info.ptr + (5 + kRetentionEventCount) * kRetentionEventCellSize));
+        ASSERT_EQ(0, *(uint32_t*)(dst_info.ptr + (6 + kRetentionEventCount) * kRetentionEventCellSize));
+    }
 }
 
 TEST_F(RetentionInfoTest, retention_info_finalize) {
-    doris_udf::retention_info_init(ctx, &dst_info);
-    update_retention_info(ctx, dst_info);
-    StringVal rs = doris_udf::retention_info_finalize(ctx, dst_info);
-    EXPECT_EQ(12, rs.len);
-    EXPECT_EQ(-385, *((int16_t*)(rs.ptr + 0)));
-    EXPECT_EQ(-1, *((int16_t*)(rs.ptr + 2)));
-    EXPECT_EQ(1, *((int16_t*)(rs.ptr + 4)));
-    EXPECT_EQ(2, *((int16_t*)(rs.ptr + 6)));
-    EXPECT_EQ(3, *((int16_t*)(rs.ptr + 8)));
-    EXPECT_EQ(384, *((int16_t*)(rs.ptr + 10)));
-}
+    {
+        retention_info_init(ctx, &dst_info);
+        update_retention_info(ctx, 1, "day", {0, 2}, {0, 86399}, &dst_info);
+        update_retention_info(ctx, 2, "day", {0, 1, 3}, {86399, 86399, 300}, &dst_info);
+        StringVal rs = retention_info_finalize(ctx, dst_info);
+        EXPECT_EQ(12, rs.len);
+        EXPECT_EQ(0, *((int16_t*)(rs.ptr + 0)));
+        EXPECT_EQ(2, *((int16_t*)(rs.ptr + 2)));
+        EXPECT_EQ(3, *((int16_t*)(rs.ptr + 4)));
+        EXPECT_EQ(4, *((int16_t*)(rs.ptr + 6)));
+        EXPECT_EQ(768, *((int16_t*)(rs.ptr + 8)));
+        EXPECT_EQ(769, *((int16_t*)(rs.ptr + 10)));
+    }
 
-TEST_F(RetentionInfoTest, make_value_benckmark) {
-    for (int16_t i = 0; i < 1000; ++i) {
-        for (int v = -1; v <= std::numeric_limits<int16_t>::max(); ++v) {
-            doris_udf::make_value(v, i);
-        }
+    {
+        retention_info_init(ctx, &dst_info);
+        update_retention_info(ctx, 1, "day", {0, 3}, {5500, 45}, &dst_info);
+        update_retention_info(ctx, 2, "day", {0, 3}, {86399, 300}, &dst_info);
+        StringVal rs = retention_info_finalize(ctx, dst_info);
+        EXPECT_EQ(10, rs.len);
+        EXPECT_EQ(0, *((int16_t*)(rs.ptr + 0)));
+        EXPECT_EQ(2, *((int16_t*)(rs.ptr + 2)));
+        EXPECT_EQ(4, *((int16_t*)(rs.ptr + 4)));
+        EXPECT_EQ(768, *((int16_t*)(rs.ptr + 6)));
+        EXPECT_EQ(769, *((int16_t*)(rs.ptr + 8)));
     }
 }
 

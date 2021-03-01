@@ -22,6 +22,8 @@
 
 namespace doris {
 
+using namespace doris_udf;
+
 class RetentionCountTest : public testing::Test {
 public:
     RetentionCountTest() = default;
@@ -33,106 +35,88 @@ public:
 
     void TearDown() { delete utils; }
 
-    FunctionUtils *utils;
-    FunctionContext *ctx;
+    void update_retention_info(FunctionContext* ctx, int event_type, const char* unit,
+                               const std::vector<int64_t> intervals,
+                               const std::vector<int64_t> offsets,
+                               StringVal* dst) {
+        ASSERT_EQ(intervals.size(), offsets.size());
+        BigIntVal start_time(ts * 1000);
+        for (int i = 0; i < intervals.size(); ++i) {
+            retention_info_update(ctx, start_time, StringVal(unit),
+                                  BigIntVal((ts + intervals[i] * 86400 + offsets[i]) * 1000), IntVal(event_type),
+                                  dst);
+        }
+    }
+
+    StringVal generate_retention_info1(FunctionContext* ctx) {
+        StringVal dst_info;
+        retention_count_init(ctx, &dst_info);
+        update_retention_info(ctx, 1, "day", {0, 2}, {0, 86399}, &dst_info);
+        update_retention_info(ctx, 2, "day", {0, 1, 3}, {86399, 86399, 300}, &dst_info);
+        return retention_info_finalize(ctx, dst_info);
+    }
+
+    StringVal generate_retention_info2(FunctionContext* ctx) {
+        StringVal dst_info;
+        retention_count_init(ctx, &dst_info);
+        update_retention_info(ctx, 1, "day", {0, 3}, {5500, 45}, &dst_info);
+        update_retention_info(ctx, 2, "day", {0, 3}, {86399, 300}, &dst_info);
+        return retention_info_finalize(ctx, dst_info);
+    }
+
+    void generate_retention_count(FunctionContext* ctx, StringVal& dst_count) {
+        retention_count_init(ctx, &dst_count);
+        retention_count_update(ctx, generate_retention_info1(ctx), &dst_count);
+        retention_count_update(ctx, generate_retention_info2(ctx), &dst_count);
+    }
+
+    static const int64_t ts = 1614047612;
+    FunctionUtils* utils = nullptr;
+    FunctionContext* ctx = nullptr;
     StringVal dst_count;
 };
 
-StringVal generate_retention_info1(FunctionContext* ctx) {
-    StringVal dst_info;
-    doris_udf::retention_count_init(ctx, &dst_info);
-    BigIntVal start_time(1614047612820L);
-    StringVal unit("day");
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614047612820L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614134012000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614220412000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614306812000L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614307112000L), IntVal(2), &dst_info);
-    return doris_udf::retention_info_finalize(ctx, dst_info);
-}
-
-StringVal generate_retention_info2(FunctionContext* ctx) {
-    StringVal dst_info;
-    doris_udf::retention_count_init(ctx, &dst_info);
-    BigIntVal start_time(1614047612820L);
-    StringVal unit("day");
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614047618320L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614134012000L), IntVal(2), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614306856000L), IntVal(1), &dst_info);
-    doris_udf::retention_info_update(ctx, start_time, unit, BigIntVal(1614307112000L), IntVal(2), &dst_info);
-    return doris_udf::retention_info_finalize(ctx, dst_info);
-}
-
-void generate_retention_count(FunctionContext* ctx, StringVal& dst_count) {
-    doris_udf::retention_count_init(ctx, &dst_count);
-    doris_udf::retention_count_update(ctx, generate_retention_info1(ctx), &dst_count);
-    doris_udf::retention_count_update(ctx, generate_retention_info2(ctx), &dst_count);
-}
-
 TEST_F(RetentionCountTest, retention_count_init) {
-    doris_udf::retention_count_init(ctx, &dst_count);
+    retention_count_init(ctx, &dst_count);
     EXPECT_FALSE(dst_count.is_null);
-    EXPECT_EQ(doris_udf::kRetentionCountBufferSize, dst_count.len);
+    EXPECT_EQ(kRetentionCountBufferSize, dst_count.len);
+    for (int i = 0; i < kRetentionCountBufferSize; ++i) {
+        ASSERT_EQ(0, *(dst_count.ptr + i));
+    }
 }
 
 TEST_F(RetentionCountTest, retention_count_update) {
     generate_retention_count(ctx, dst_count);
 
-    uint32_t val1 = *(uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t val2 = *(uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t val3 = *(uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 2 * doris_udf::kRetentionCellSize);
-    uint32_t val4 = *(uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 3 * doris_udf::kRetentionCellSize);
-    uint32_t val5 = *(uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 4 * doris_udf::kRetentionCellSize);
-    uint32_t val6 = *(uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t val7 = *(uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 1 * doris_udf::kRetentionCellSize);
-
-    EXPECT_EQ(2, val1);
-    EXPECT_EQ(2, val2);
-    EXPECT_EQ(2, val3);
-    EXPECT_EQ(1, val4);
-    EXPECT_EQ(2, val5);
-    EXPECT_EQ(2, val6);
-    EXPECT_EQ(2, val7);
+    EXPECT_EQ(2, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 0 * kRetentionCellSize));
+    EXPECT_EQ(2, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 2 * kRetentionCellSize));
+    EXPECT_EQ(1, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 3 * kRetentionCellSize));
+    EXPECT_EQ(2, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 4 * kRetentionCellSize));
+    EXPECT_EQ(2, *(uint32_t*)(dst_count.ptr + 3 * kRetentionSingleRowSize + 0 * kRetentionCellSize));
+    EXPECT_EQ(2, *(uint32_t*)(dst_count.ptr + 3 * kRetentionSingleRowSize + 1 * kRetentionCellSize));
 }
 
 TEST_F(RetentionCountTest, retention_count_merge) {
     StringVal src_count;
-    doris_udf::retention_count_init(ctx, &src_count);
+    retention_count_init(ctx, &src_count);
     StringVal src_info = generate_retention_info2(ctx);
-    doris_udf::retention_count_update(ctx, src_info, &src_count);
+    retention_count_update(ctx, src_info, &src_count);
     generate_retention_count(ctx, dst_count);
-    doris_udf::retention_count_merge(ctx, src_count, &dst_count);
 
-    uint32_t* val1 = (uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t* val2 = (uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t* val3 = (uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 2 * doris_udf::kRetentionCellSize);
-    uint32_t* val4 = (uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 3 * doris_udf::kRetentionCellSize);
-    uint32_t* val5 = (uint32_t*)(dst_count.ptr + 0 * doris_udf::kRetentionSingleRowSize + 4 * doris_udf::kRetentionCellSize);
-    uint32_t* val6 = (uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 0 * doris_udf::kRetentionCellSize);
-    uint32_t* val7 = (uint32_t*)(dst_count.ptr + 3 * doris_udf::kRetentionSingleRowSize + 1 * doris_udf::kRetentionCellSize);
+    retention_count_merge(ctx, src_count, &dst_count);
 
-    EXPECT_EQ(3, *val1);
-    EXPECT_EQ(3, *val2);
-    EXPECT_EQ(3, *val3);
-    EXPECT_EQ(1, *val4);
-    EXPECT_EQ(3, *val5);
-    EXPECT_EQ(3, *val6);
-    EXPECT_EQ(3, *val7);
+    EXPECT_EQ(3, *(uint32_t*)(dst_count.ptr + 3 * kRetentionSingleRowSize + 0 * kRetentionCellSize));
+    EXPECT_EQ(3, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 0 * kRetentionCellSize));
+    EXPECT_EQ(3, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 2 * kRetentionCellSize));
+    EXPECT_EQ(1, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 3 * kRetentionCellSize));
+    EXPECT_EQ(3, *(uint32_t*)(dst_count.ptr + 0 * kRetentionSingleRowSize + 4 * kRetentionCellSize));
+    EXPECT_EQ(3, *(uint32_t*)(dst_count.ptr + 3 * kRetentionSingleRowSize + 0 * kRetentionCellSize));
 }
 
 TEST_F(RetentionCountTest, retention_count_finalize) {
     generate_retention_count(ctx, dst_count);
-    StringVal rs = doris_udf::retention_count_finalize(ctx, dst_count);
+    StringVal rs = retention_count_finalize(ctx, dst_count);
     EXPECT_EQ(StringVal("0:-1:2;0:1:2;0:2:1;0:3:2;3:-1:2;3:0:2;"), rs);
-}
-
-TEST_F(RetentionCountTest, parse_retention_row_column) {
-    for (int i = 0; i < 1000; ++i) {
-        int16_t row, column;
-        for (int v = -1; v <= std::numeric_limits<int16_t>::max(); ++v) {
-            doris_udf::parse_retention_row_column(v, &row, &column);
-        }
-    }
 }
 
 }

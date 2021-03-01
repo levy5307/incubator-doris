@@ -24,6 +24,8 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/test/udf_ga")
 
 string(REPLACE "-static-libasan;" "" TEST_LINK_LIBS "${TEST_LINK_LIBS}")
 
+ADD_BE_TEST(short_encode_test)
+target_link_libraries(short_encode_test short_encode)
 ADD_BE_TEST(funnel_info_test)
 target_link_libraries(funnel_info_test ${BUILD_DIR}/src/udf_ga/libfunnel.so)
 ADD_BE_TEST(funnel_count_test)
