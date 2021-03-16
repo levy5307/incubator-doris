@@ -33,10 +33,8 @@ import java.util.Calendar;
 
 public class DorisStreamLoader {
     private final static Logger LOG = LogManager.getLogger(DorisStreamLoader.class);
+    private final int TEMPORARY_REDIRECT_CODE = 307;
     private static String loadUrlPattern = "http://%s/api/%s/%s/_stream_load?";
-    private String hostPort;
-    private String db;
-    private String tbl;
     private String user;
     private String passwd;
     private String loadUrlStr;
@@ -44,40 +42,12 @@ public class DorisStreamLoader {
     private String feIdentity;
 
     public DorisStreamLoader(LoadAuditLoaderPlugin.AuditLoaderConf conf) {
-        this.hostPort = conf.frontendHostPort;
-        this.db = conf.database;
-        this.tbl = conf.table;
         this.user = conf.user;
         this.passwd = conf.password;
-
-        this.loadUrlStr = String.format(loadUrlPattern, hostPort, db, tbl);
+        this.loadUrlStr = String.format(loadUrlPattern, conf.frontendHostPort, conf.database, conf.table);
         this.authEncoding = Base64.getEncoder().encodeToString(String.format("%s:%s", user, passwd).getBytes(StandardCharsets.UTF_8));
         // currently, FE identity is FE's IP, so we replace the "." in IP to make it suitable for label
         this.feIdentity = conf.feIdentity.replaceAll("\\.", "_");
-    }
-
-    public static void main(String[] args) {
-        try {
-            LoadAuditLoaderPlugin.AuditLoaderConf conf = new LoadAuditLoaderPlugin.AuditLoaderConf();
-            conf.frontendHostPort = "fe_host";
-            conf.database = "db1";
-            conf.table = "tbl1";
-            conf.user = "root";
-            conf.password = "";
-
-            DorisStreamLoader loader = new DorisStreamLoader(conf);
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("1\t2\n3\t4\n");
-
-            System.out.println("before load");
-            LoadResponse loadResponse = loader.loadBatch(sb);
-
-            System.out.println(loadResponse);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     private HttpURLConnection getConnection(String urlStr, String label) throws IOException {
@@ -88,12 +58,9 @@ public class DorisStreamLoader {
         conn.setRequestProperty("Authorization", "Basic " + authEncoding);
         conn.addRequestProperty("Expect", "100-continue");
         conn.addRequestProperty("Content-Type", "text/plain; charset=UTF-8");
-
         conn.addRequestProperty("label", label);
-        conn.addRequestProperty("max_filter_ratio", "1.0");
         conn.addRequestProperty("columns", "job_id, label, load_type, db, table_list, file_path_list, broker_user, create_time, " +
                 "load_start_time, load_finish_time, scan_rows, scan_bytes, file_number");
-
         conn.setDoOutput(true);
         conn.setDoInput(true);
 
@@ -114,7 +81,7 @@ public class DorisStreamLoader {
             feConn = getConnection(loadUrlStr, label);
             int status = feConn.getResponseCode();
             // fe send back http response code TEMPORARY_REDIRECT 307 and new be location
-            if (status != 307) {
+            if (status != TEMPORARY_REDIRECT_CODE) {
                 throw new Exception("status is not TEMPORARY_REDIRECT 307, status: " + status);
             }
             String location = feConn.getHeaderField("Location");
