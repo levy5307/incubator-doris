@@ -12,7 +12,7 @@ static const uint16_t kMaxEventCount = 5000;
 static const uint16_t kMaxStep = 1024;
 static const uint32_t kMaxFunnelInfoSize = 10 << 20;
 static const uint8_t kFunnelInfoHeaderSize = 2 * sizeof(int64_t);
-static const uint32_t kMaxFunnelSupportInterval = kFunnelRowCount * 86400;
+static const uint64_t kMaxFunnelSupportInterval = (uint64_t)kFunnelRowCount * 86400 * 1000;
 
 struct Event {
     uint8_t _step;

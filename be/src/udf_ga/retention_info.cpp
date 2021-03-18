@@ -111,7 +111,7 @@ StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg
     uint8_t row_max_index = kRetentionEventCount - 1;
     for (; row_max_index >= 0; row_max_index--) {
         uint32_t ts = *(uint32_t*)(agg_info.ptr + row_max_index * kRetentionEventCellSize);
-        if (ts != 0) {
+        if (ts != 0 || row_max_index == 0) {
             break;
         }
     }
@@ -119,7 +119,7 @@ StringVal retention_info_finalize(FunctionContext* context, const StringVal& agg
     uint8_t column_max_index = kRetentionEventCount - 1;
     for (; column_max_index >= 0; column_max_index--) {
         uint32_t ts = *(uint32_t*)(agg_info.ptr + (column_max_index + kRetentionEventCount) * kRetentionEventCellSize);
-        if (ts != 0) {
+        if (ts != 0 || column_max_index == 0) {
             break;
         }
     }
