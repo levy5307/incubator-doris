@@ -672,7 +672,7 @@ void TabletManager::get_tablet_stat(TTabletStatResult* result) {
 
 TabletSharedPtr TabletManager::find_best_tablet_to_compaction(
         CompactionType compaction_type, DataDir* data_dir,
-        vector<TTabletId> &tablet_submitted_compaction) {
+        std::vector<TTabletId>& tablet_submitted_compaction, uint32_t* score) {
     int64_t now_ms = UnixMillis();
     const string& compaction_type_str = compaction_type == CompactionType::BASE_COMPACTION ? "base" : "cumulative";
     uint32_t highest_score = 0;
@@ -750,13 +750,7 @@ TabletSharedPtr TabletManager::find_best_tablet_to_compaction(
                   << ", tablet_id=" << best_tablet->tablet_id()
                   << ", path=" << data_dir->path()
                   << ", highest_score=" << highest_score;
-        // TODO(lingbin): Remove 'max' from metric name, it would be misunderstood as the
-        // biggest in history(like peak), but it is really just the value at current moment.
-        if (compaction_type == CompactionType::BASE_COMPACTION) {
-            DorisMetrics::instance()->tablet_base_max_compaction_score->set_value(highest_score);
-        } else {
-            DorisMetrics::instance()->tablet_cumulative_max_compaction_score->set_value(highest_score);
-        }
+        *score = highest_score;
     }
     return best_tablet;
 }
