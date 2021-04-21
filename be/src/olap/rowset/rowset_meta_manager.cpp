@@ -82,7 +82,7 @@ OLAPStatus RowsetMetaManager::get_json_rowset_meta(OlapMeta* meta, TabletUid tab
 OLAPStatus RowsetMetaManager::save(OlapMeta* meta, TabletUid tablet_uid, const RowsetId& rowset_id, const RowsetMetaPB& rowset_meta_pb) {
     std::string key = ROWSET_PREFIX + tablet_uid.to_string() + "_" + rowset_id.to_string();
     std::string value;
-    bool ret = rowset_meta_pb.SerializeToString(&value);;
+    bool ret = rowset_meta_pb.SerializeToString(&value);
     if (!ret) {
         std::string error_msg = "serialize rowset pb failed. rowset id:" + key;
         LOG(WARNING) << error_msg;
