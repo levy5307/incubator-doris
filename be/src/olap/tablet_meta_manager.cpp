@@ -106,15 +106,8 @@ OLAPStatus TabletMetaManager::save(DataDir* store,
     VLOG(3) << "save tablet meta to meta store: key = " << key;
     OlapMeta* meta = store->get_meta();
 
-    TabletMetaPB de_tablet_meta_pb;
-    bool parsed = de_tablet_meta_pb.ParseFromString(meta_binary);
-    if (!parsed) {
-        LOG(FATAL) << "deserialize from previous serialize result failed";
-    }
-
-    LOG(INFO) << "save tablet meta " 
-              << ", key:" << key
-              << " meta_size=" << meta_binary.length();
+    LOG(INFO) << "save tablet meta "
+              << ", key:" << key << " meta_size=" << meta_binary.length();
     return meta->put(META_COLUMN_FAMILY_INDEX, key, meta_binary);
 }
 
