@@ -45,7 +45,7 @@ public:
     OLAPStatus set_tablet_state(TabletState state);
 
     // Property encapsulated in TabletMeta
-    inline const TabletMetaSharedPtr tablet_meta();
+    inline const TabletMetaSharedPtr tablet_meta() const;
 
     inline bool is_memory() const;
     inline TabletUid tablet_uid() const;
@@ -95,7 +95,7 @@ inline string BaseTablet::tablet_path() const {
     return _tablet_path;
 }
 
-inline const TabletMetaSharedPtr BaseTablet::tablet_meta() {
+inline const TabletMetaSharedPtr BaseTablet::tablet_meta() const {
     return _tablet_meta;
 }
 
