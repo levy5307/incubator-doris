@@ -475,6 +475,7 @@ public class ShowExecutor {
                 continue;
             }
             try {
+                database.readLock();
                 List<Table> tables = database.getTables();
                 for (Table tbl : tables) {
                     if (tbl instanceof OlapTable) {
