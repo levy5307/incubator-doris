@@ -3792,7 +3792,7 @@ public class Catalog {
         // get storage format
         TStorageFormat storageFormat = TStorageFormat.V2; // default is segment v2
         try {
-            storageFormat = PropertyAnalyzer.analyzeStorageFormat(properties) == TStorageFormat.V1 ? TStorageFormat.V1 : TStorageFormat.V2;
+            storageFormat = PropertyAnalyzer.analyzeStorageFormat(properties) == TStorageFormat.V2 ? TStorageFormat.V2 : TStorageFormat.V1;
         } catch (AnalysisException e) {
             throw new DdlException(e.getMessage());
         }
