@@ -44,6 +44,9 @@ OLAPStatus Compaction::do_compaction(int64_t permits) {
     OLAPStatus st = do_compaction_impl(permits);
     _tablet->data_dir()->disks_compaction_score_increment(-permits);
     _tablet->data_dir()->disks_compaction_num_increment(-1);
+    if (st != OLAP_SUCCESS) {
+        gc_output_rowset();
+    }
     return st;
 }
 
@@ -116,9 +119,15 @@ OLAPStatus Compaction::do_compaction_impl(int64_t permits) {
         _tablet->set_last_base_compaction_success_time(now);
     }
 
+    int64_t current_max_version;
+    {
+        ReadLock rdlock(_tablet->get_header_lock_ptr());
+        current_max_version = _tablet->rowset_with_max_version()->end_version();
+    }
+
     LOG(INFO) << "succeed to do " << compaction_name() << ". tablet=" << _tablet->full_name()
               << ", output_version=" << _output_version.first << "-" << _output_version.second
-              << ", current_max_version=" << _tablet->rowset_with_max_version()->end_version()
+              << ", current_max_version=" << current_max_version
               << ", disk=" << _tablet->data_dir()->path() << ", segments=" << segments_num
               << ". elapsed time=" << watch.get_elapse_second() << "s.";
 
@@ -165,17 +174,10 @@ void Compaction::modify_rowsets() {
     _tablet->save_meta();
 }
 
-OLAPStatus Compaction::gc_unused_rowsets() {
-    StorageEngine* storage_engine = StorageEngine::instance();
-    if (_state != CompactionState::SUCCESS) {
-        storage_engine->add_unused_rowset(_output_rowset);
-        return OLAP_SUCCESS;
+void Compaction::gc_output_rowset() {
+    if (_state != CompactionState::SUCCESS && _output_rowset != nullptr) {
+        StorageEngine::instance()->add_unused_rowset(_output_rowset);
     }
-    for (auto& rowset : _input_rowsets) {
-        storage_engine->add_unused_rowset(rowset);
-    }
-    _input_rowsets.clear();
-    return OLAP_SUCCESS;
 }
 
 // Find the longest consecutive version path in "rowset", from begining.

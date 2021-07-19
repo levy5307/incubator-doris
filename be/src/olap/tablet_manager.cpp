@@ -1333,18 +1333,16 @@ OLAPStatus TabletManager::_create_tablet_meta_unlocked(const TCreateTabletReq& r
     OLAPStatus res = TabletMeta::create(request, TabletUid::gen_uid(), shard_id,
                                         next_unique_id, col_idx_to_unique_id, tablet_meta);
 
-    // TODO(lingbin): when beta-rowset is default, should remove it
-    if (!request.__isset.storage_format || request.storage_format == TStorageFormat::DEFAULT) {
-        auto default_rowset_type = StorageEngine::instance()->default_rowset_type();
-        (*tablet_meta)->set_preferred_rowset_type(default_rowset_type);
-    } else if (request.storage_format == TStorageFormat::V1) {
-        (*tablet_meta)->set_preferred_rowset_type(ALPHA_ROWSET);
-    } else if (request.storage_format == TStorageFormat::V2) {
+    if (request.__isset.storage_format && request.storage_format == TStorageFormat::V2) {
         (*tablet_meta)->set_preferred_rowset_type(BETA_ROWSET);
     } else {
-        // should never happen
-        LOG(ERROR) << "invalid TStorageFormat: " << request.storage_format;
-        DCHECK(false);
+        if (is_schema_change && base_tablet != nullptr) {
+            auto base_tablet_rowset_type = base_tablet->tablet_meta()->preferred_rowset_type();
+            (*tablet_meta)->set_preferred_rowset_type(base_tablet_rowset_type);
+        } else {
+            auto default_rowset_type = StorageEngine::instance()->default_rowset_type();
+            (*tablet_meta)->set_preferred_rowset_type(default_rowset_type);
+        }
     }
     return res;
 }

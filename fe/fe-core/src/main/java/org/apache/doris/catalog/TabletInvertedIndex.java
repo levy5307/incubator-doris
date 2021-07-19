@@ -34,8 +34,10 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
+import com.google.common.collect.TreeMultimap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -602,5 +604,117 @@ public class TabletInvertedIndex {
     public Map<Long, Long> getReplicaToTabletMap() {
         return replicaToTabletMap;
     }
+
+    // Only build from available bes, exclude colocate tables
+    public Map<TStorageMedium, TreeMultimap<Long, PartitionBalanceInfo>> buildPartitionInfoBySkew(List<Long> availableBeIds) {
+        readLock();
+
+        // 1. gen <partitionId-indexId, <beId, replicaCount>>
+        // for each replica(all tablets):
+        //      find beId, then replicaCount++
+        Map<TStorageMedium, Table<Long, Long, Map<Long, Long>>> partitionReplicasInfoMaps = Maps.newHashMap();
+        for (TStorageMedium medium : TStorageMedium.values()) {
+            partitionReplicasInfoMaps.put(medium, HashBasedTable.create());
+        }
+        try {
+            // Changes to the returned set will update the underlying table
+            // tablet id -> (backend id -> replica)
+            Set<Table.Cell<Long, Long, Replica>> cells = replicaMetaTable.cellSet();
+            for (Table.Cell<Long, Long, Replica> cell : cells) {
+                Long tabletId = cell.getRowKey();
+                Long beId = cell.getColumnKey();
+                try {
+                    Preconditions.checkState(availableBeIds.contains(beId), "dead be " + beId);
+                    TabletMeta tabletMeta = tabletMetaMap.get(tabletId);
+                    Preconditions.checkNotNull(tabletMeta, "invalid tablet " + tabletId);
+                    Preconditions.checkState(!Catalog.getCurrentColocateIndex().isColocateTable(tabletMeta.getTableId()),
+                            "should not be the colocate table");
+
+                    TStorageMedium medium = tabletMeta.getStorageMedium();
+                    Table<Long, Long, Map<Long, Long>> partitionReplicasInfo = partitionReplicasInfoMaps.get(medium);
+                    Map<Long, Long> countMap = partitionReplicasInfo.get(tabletMeta.getPartitionId(), tabletMeta.getIndexId());
+                    if (countMap == null) {
+                        // If one be doesn't have any replica of one partition, it should be counted too.
+                        countMap = availableBeIds.stream().collect(Collectors.toMap(i -> i, i -> 0L));
+                    }
+
+                    Long count = countMap.get(beId);
+                    countMap.put(beId, count + 1L);
+                    partitionReplicasInfo.put(tabletMeta.getPartitionId(), tabletMeta.getIndexId(), countMap);
+                    partitionReplicasInfoMaps.put(medium, partitionReplicasInfo);
+                } catch (IllegalStateException | NullPointerException e) {
+                    // If the tablet or be has some problem, don't count in
+                    LOG.debug(e.getMessage());
+                }
+            }
+        } finally {
+            readUnlock();
+        }
+
+        // 2. Populate ClusterBalanceInfo::table_info_by_skew
+        // for each PartitionId-MaterializedIndex:
+        //      for each beId: record max_count, min_count(replicaCount)
+        //      put <max_count-min_count, TableBalanceInfo> to table_info_by_skew
+        Map<TStorageMedium, TreeMultimap<Long, PartitionBalanceInfo>> skewMaps = Maps.newHashMap();
+        for (TStorageMedium medium : TStorageMedium.values()) {
+            TreeMultimap<Long, PartitionBalanceInfo> partitionInfoBySkew = TreeMultimap.create(Ordering.natural(), Ordering.arbitrary());
+            Set<Table.Cell<Long, Long, Map<Long, Long>>> mapCells = partitionReplicasInfoMaps.getOrDefault(medium, HashBasedTable.create()).cellSet();
+            for (Table.Cell<Long, Long, Map<Long, Long>> cell : mapCells) {
+                Map<Long, Long> countMap = cell.getValue();
+                Preconditions.checkNotNull(countMap);
+                PartitionBalanceInfo pbi = new PartitionBalanceInfo(cell.getRowKey(), cell.getColumnKey());
+                for (Map.Entry<Long, Long> entry : countMap.entrySet()) {
+                    Long beID = entry.getKey();
+                    Long replicaCount = entry.getValue();
+                    pbi.beByReplicaCount.put(replicaCount, beID);
+                }
+                // beByReplicaCount values are natural ordering
+                long minCount = pbi.beByReplicaCount.keySet().first();
+                long maxCount = pbi.beByReplicaCount.keySet().last();
+                partitionInfoBySkew.put(maxCount - minCount, pbi);
+            }
+            skewMaps.put(medium, partitionInfoBySkew);
+        }
+        return skewMaps;
+    }
+
+    public static class PartitionBalanceInfo {
+        public Long partitionId;
+        public Long indexId;
+        // Natural ordering
+        public TreeMultimap<Long, Long> beByReplicaCount = TreeMultimap.create();
+
+        public PartitionBalanceInfo(Long partitionId, Long indexId) {
+            this.partitionId = partitionId;
+            this.indexId = indexId;
+        }
+
+        public PartitionBalanceInfo(PartitionBalanceInfo info) {
+            this.partitionId = info.partitionId;
+            this.indexId = info.indexId;
+            this.beByReplicaCount = TreeMultimap.create(info.beByReplicaCount);
+        }
+    }
+
+    // just for ut
+    public Table<Long, Long, Replica> getReplicaMetaTable() {
+        return replicaMetaTable;
+    }
+
+    // just for ut
+    public Table<Long, Long, Replica> getBackingReplicaMetaTable() {
+        return backingReplicaMetaTable;
+    }
+
+    // just for ut
+    public Table<Long, Long, TabletMeta> getTabletMetaTable() {
+        return tabletMetaTable;
+    }
+
+    // just for ut
+    public Map<Long, TabletMeta> getTabletMetaMap() {
+        return tabletMetaMap;
+    }
+
 }
 

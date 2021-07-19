@@ -264,7 +264,7 @@ public class DynamicPartitionScheduler extends MasterDaemon {
             ArrayList<DropPartitionClause> dropPartitionClauses;
             String tableName;
             boolean skipAddPartition = false;
-            OlapTable olapTable;
+            OlapTable olapTable = null;
             db.readLock();
             try {
                 olapTable = (OlapTable) db.getTable(tableId);
@@ -309,6 +309,10 @@ public class DynamicPartitionScheduler extends MasterDaemon {
                 }
                 dropPartitionClauses = getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat);
                 tableName = olapTable.getName();
+            } catch (Exception e) {
+                LOG.warn("manage partition " +
+                        (olapTable == null ? "" : "for " + db.getFullName() + "." + olapTable.getName() + " failed"), e);
+                continue;
             } finally {
                 db.readUnlock();
             }

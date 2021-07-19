@@ -91,6 +91,7 @@ Status RepeatNode::get_repeated_batch(
         for (int j = 0; src_it != src_tuple_descs.end() && dst_it != dst_tuple_descs.end(); ++src_it, ++dst_it, ++j) {
             Tuple* src_tuple = src_row->get_tuple(j);
             if (src_tuple == NULL) {
+                dst_row->set_tuple(j, NULL);
                 continue;
             }
 

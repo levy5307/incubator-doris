@@ -58,7 +58,7 @@ protected:
     OLAPStatus do_compaction_impl(int64_t permits);
 
     void modify_rowsets();
-    OLAPStatus gc_unused_rowsets();
+    void gc_output_rowset();
 
     OLAPStatus construct_output_rowset_writer();
     OLAPStatus construct_input_rowset_readers();
