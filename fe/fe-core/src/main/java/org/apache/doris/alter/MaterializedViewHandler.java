@@ -1185,7 +1185,7 @@ public class MaterializedViewHandler extends AlterHandler {
                 ErrorReport.reportDdlException(ErrorCode.ERR_NOT_OLAP_TABLE, tableName);
             }
             OlapTable olapTable = (OlapTable) table;
-            if (olapTable.getState() != OlapTableState.ROLLUP) {
+            if (olapTable.getState() != OlapTableState.ROLLUP && olapTable.getState() != OlapTableState.WAITING_STABLE) {
                 throw new DdlException("Table[" + tableName + "] is not under ROLLUP. "
                         + "Use 'ALTER TABLE DROP ROLLUP' if you want to.");
             }
@@ -1203,7 +1203,7 @@ public class MaterializedViewHandler extends AlterHandler {
             }
             if (rollupJobV2List.size() == 0) {
                 rollupJob = getAlterJob(olapTable.getId());
-                Preconditions.checkNotNull(rollupJob, olapTable.getId());
+                Preconditions.checkNotNull(rollupJob, "Table[" + tableName + "] is not under ROLLUP. ");
                 if (rollupJob.getState() == JobState.FINISHED
                         || rollupJob.getState() == JobState.FINISHING
                         || rollupJob.getState() == JobState.CANCELLED) {
