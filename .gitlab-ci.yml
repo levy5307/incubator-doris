@@ -42,14 +42,13 @@ package_job:
     - branch-0.13-mdh
   stage: package
   variables:
-    MINOS_CONFIG_FILE: '$CI_PROJECT_DIR/deployment-config/deploy.cfg'
-    MINOS2_CONFIG_FILE: '$CI_PROJECT_DIR/deployment/deploy.cfg'
+    MINOS_CONFIG_FILE: '/root/deployment-config/deploy.cfg'
+    MINOS2_CONFIG_FILE: '/root/deployment/deploy.cfg'
   script:
-    - git clone git@git.n.xiaomi.com:teg-devops/minos.git
-    - git clone git@git.n.xiaomi.com:teg-devops/deployment-config.git
-    - git clone git@git.n.xiaomi.com:teg-devops/deployment.git
-    - cd minos && ./build.sh build
-    - cd ../ && ./make_distribution.sh
-    - BUILD_VERSION=`egrep "^build_version" gensrc/script/gen_build_version.sh | awk '-F"' '{print $2}'`
-    - cd minos/client/ && ./package install doris --package_dir=$CI_PROJECT_DIR --version=$BUILD_VERSION
+    - cd /root/minos && git pull
+    - cd ../ && cd deployment-config && git pull
+    - cd ../ && cd deployment && git pull
+    - cd $CI_PROJECT_DIR && ./make_distribution.sh
+    - BUILD_VERSION=`egrep "^build_version" $CI_PROJECT_DIR/gensrc/script/gen_build_version.sh | awk '-F"' '{print $2}'`
+    - cd /root/minos/client/ && ./package install doris --package_dir=$CI_PROJECT_DIR --version=$BUILD_VERSION
   when: on_success
