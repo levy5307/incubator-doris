@@ -2782,6 +2782,7 @@ public class Catalog {
         tryLock(true);
         try {
             Database db = fullNameToDb.get(dbName);
+            if (db == null) return;
             db.writeLock();
             try {
                 Set<String> tableNames = db.getTableNamesWithLock();
@@ -2899,7 +2900,7 @@ public class Catalog {
     public void replayRecoverDatabase(RecoverInfo info) {
         long dbId = info.getDbId();
         Database db = Catalog.getCurrentRecycleBin().replayRecoverDatabase(dbId);
-
+        if (db == null) return;
         // add db to catalog
         replayCreateDb(db);
 
@@ -2926,6 +2927,7 @@ public class Catalog {
 
     public void replayAlterDatabaseQuota(String dbName, long quota, QuotaType quotaType) {
         Database db = getDb(dbName);
+        if (db == null) return;
         Preconditions.checkNotNull(db);
         if (quotaType == QuotaType.DATA) {
             db.setDataQuotaWithLock(quota);
@@ -2989,6 +2991,7 @@ public class Catalog {
         tryLock(true);
         try {
             Database db = fullNameToDb.get(dbName);
+            if (db == null) return;
             Cluster cluster = nameToCluster.get(db.getClusterName());
             cluster.removeDb(db.getFullName(), db.getId());
             db.setName(newDbName);
@@ -3330,10 +3333,13 @@ public class Catalog {
 
     public void replayAddPartition(PartitionPersistInfo info) throws DdlException {
         Database db = this.getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable olapTable = (OlapTable) db.getTable(info.getTableId());
+            if (olapTable == null) return;
             Partition partition = info.getPartition();
+            if (partition == null) return;
 
             PartitionInfo partitionInfo = olapTable.getPartitionInfo();
             if (info.isTempPartition()) {
@@ -3418,9 +3424,11 @@ public class Catalog {
 
     public void replayDropPartition(DropPartitionInfo info) {
         Database db = this.getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable olapTable = (OlapTable) db.getTable(info.getTableId());
+            if (olapTable == null) return;
             if (info.isTempPartition()) {
                 olapTable.dropTempPartition(info.getPartitionName(), true);
             } else {
@@ -3438,9 +3446,11 @@ public class Catalog {
     public void replayRecoverPartition(RecoverInfo info) {
         long dbId = info.getDbId();
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             Table table = db.getTable(info.getTableId());
+            if (table == null) return;
             Catalog.getCurrentRecycleBin().replayRecoverPartition((OlapTable) table, info.getPartitionId());
         } finally {
             db.writeUnlock();
@@ -4287,6 +4297,7 @@ public class Catalog {
 
     public void replayCreateTable(String dbName, Table table) {
         Database db = this.fullNameToDb.get(dbName);
+        if (db == null) return;
         db.createTableWithLock(table, true, false);
 
         if (!isCheckpointThread()) {
@@ -4294,6 +4305,7 @@ public class Catalog {
             if (table.getType() == TableType.OLAP) {
                 TabletInvertedIndex invertedIndex = Catalog.getCurrentInvertedIndex();
                 OlapTable olapTable = (OlapTable) table;
+                if (olapTable == null) return;
                 long dbId = db.getId();
                 long tableId = table.getId();
                 for (Partition partition : olapTable.getAllPartitions()) {
@@ -4320,6 +4332,7 @@ public class Catalog {
 
     public void replayAlterExteranlTableSchema(String dbName, String tableName, List<Column> newSchema) throws DdlException {
         Database db = this.fullNameToDb.get(dbName);
+        if (db == null) return;
         db.allterExternalTableSchemaWithLock(tableName, newSchema);
     }
 
@@ -4507,6 +4520,7 @@ public class Catalog {
     public void replayRecoverTable(RecoverInfo info) {
         long dbId = info.getDbId();
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             Catalog.getCurrentRecycleBin().replayRecoverTable(db, info.getTableId());
@@ -4519,7 +4533,9 @@ public class Catalog {
         LOG.debug("replay add a replica {}", info);
         Database db = getDb(info.getDbId());
         OlapTable olapTable = (OlapTable) db.getTable(info.getTableId());
+        if (olapTable == null) return;
         Partition partition = olapTable.getPartition(info.getPartitionId());
+        if (partition == null) return;
         MaterializedIndex materializedIndex = partition.getIndex(info.getIndexId());
         Tablet tablet = materializedIndex.getTablet(info.getTabletId());
 
@@ -4543,7 +4559,9 @@ public class Catalog {
         LOG.debug("replay update a replica {}", info);
         Database db = getDb(info.getDbId());
         OlapTable olapTable = (OlapTable) db.getTable(info.getTableId());
+        if (olapTable == null) return;
         Partition partition = olapTable.getPartition(info.getPartitionId());
+        if (partition == null) return;
         MaterializedIndex materializedIndex = partition.getIndex(info.getIndexId());
         Tablet tablet = materializedIndex.getTablet(info.getTabletId());
         Replica replica = tablet.getReplicaByBackendId(info.getBackendId());
@@ -4554,6 +4572,7 @@ public class Catalog {
 
     public void replayAddReplica(ReplicaPersistInfo info) {
         Database db = getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             unprotectAddReplica(info);
@@ -4564,6 +4583,7 @@ public class Catalog {
 
     public void replayUpdateReplica(ReplicaPersistInfo info) {
         Database db = getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             unprotectUpdateReplica(info);
@@ -4575,7 +4595,9 @@ public class Catalog {
     public void unprotectDeleteReplica(ReplicaPersistInfo info) {
         Database db = getDb(info.getDbId());
         OlapTable olapTable = (OlapTable) db.getTable(info.getTableId());
+        if (olapTable == null) return;
         Partition partition = olapTable.getPartition(info.getPartitionId());
+        if (partition == null) return;
         MaterializedIndex materializedIndex = partition.getIndex(info.getIndexId());
         Tablet tablet = materializedIndex.getTablet(info.getTabletId());
         tablet.deleteReplicaByBackendId(info.getBackendId());
@@ -4583,6 +4605,7 @@ public class Catalog {
 
     public void replayDeleteReplica(ReplicaPersistInfo info) {
         Database db = getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             unprotectDeleteReplica(info);
@@ -5143,9 +5166,11 @@ public class Catalog {
         String newTableName = tableInfo.getNewTableName();
 
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             Table table = db.getTable(tableId);
+            if (table == null) return;
             String tableName = table.getName();
             db.dropTable(tableName);
             table.setName(newTableName);
@@ -5241,9 +5266,11 @@ public class Catalog {
         Map<String, String> properties = info.getPropertyMap();
 
         Database db = getDb(info.getGroupId().dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable table = (OlapTable) db.getTable(tableId);
+            if (table == null) return;
             modifyTableColocate(db, table, properties.get(PropertyAnalyzer.PROPERTIES_COLOCATE_WITH), true,
                     info.getGroupId());
         } catch (DdlException e) {
@@ -5296,9 +5323,11 @@ public class Catalog {
         String newRollupName = tableInfo.getNewRollupName();
 
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable table = (OlapTable) db.getTable(tableId);
+            if (table == null) return;
             String rollupName = table.getIndexNameById(indexId);
             Map<String, Long> indexNameToIdMap = table.getIndexNameToId();
             indexNameToIdMap.remove(rollupName);
@@ -5352,10 +5381,13 @@ public class Catalog {
         String newPartitionName = tableInfo.getNewPartitionName();
 
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable table = (OlapTable) db.getTable(tableId);
+            if (table == null) return;
             Partition partition = table.getPartition(partitionId);
+            if (partition == null) return;
             table.renamePartition(partition.getName(), newPartitionName);
 
             LOG.info("replay rename partition[{}] to {}", partition.getName(), newPartitionName);
@@ -5475,9 +5507,11 @@ public class Catalog {
         Map<String, String> properties = info.getProperties();
 
         Database db = getDb(dbId);
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable olapTable = (OlapTable) db.getTable(tableId);
+            if (olapTable == null) return;
             TableProperty tableProperty = olapTable.getTableProperty();
             if (tableProperty == null) {
                 olapTable.setTableProperty(new TableProperty(properties).buildProperty(opCode));
@@ -5979,6 +6013,7 @@ public class Catalog {
             final Cluster desCluster = this.nameToCluster.get(desClusterName);
             final Cluster srcCluster = this.nameToCluster.get(srcClusterName);
             final Database db = fullNameToDb.get(srcDbName);
+            if (db == null) return;
             if (db.getDbState() == DbState.LINK) {
                 fullNameToDb.remove(db.getFullName());
                 srcCluster.removeDb(db.getFullName(), db.getId());
@@ -6006,6 +6041,7 @@ public class Catalog {
         try {
             final Cluster desCluster = this.nameToCluster.get(desClusterName);
             final Database srcDb = fullNameToDb.get(srcDbName);
+            if (srcDb == null) return;
             srcDb.writeLock();
             srcDb.setDbState(DbState.LINK);
             srcDb.setAttachDb(desDbName);
@@ -6244,6 +6280,7 @@ public class Catalog {
 
     public void replayUpdateDb(DatabaseInfo info) {
         final Database db = fullNameToDb.get(info.getDbName());
+        if (db == null) return;
         db.setClusterName(info.getClusterName());
         db.setDbState(info.getDbState());
     }
@@ -6546,9 +6583,11 @@ public class Catalog {
 
     public void replayTruncateTable(TruncateTableInfo info) {
         Database db = getDb(info.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable olapTable = (OlapTable) db.getTable(info.getTblId());
+            if (olapTable == null) return;
             truncateTableInternal(olapTable, info.getPartitions(), info.isEntireTable());
 
             if (!Catalog.isCheckpointThread()) {
@@ -6590,9 +6629,7 @@ public class Catalog {
     public void replayCreateFunction(Function function) {
         String dbName = function.getFunctionName().getDb();
         Database db = getDb(dbName);
-        if (db == null) {
-            throw new Error("unknown database when replay log, db=" + dbName);
-        }
+        if (db == null) return;
         db.replayAddFunction(function);
     }
 
@@ -6608,9 +6645,7 @@ public class Catalog {
     public void replayDropFunction(FunctionSearchDesc functionSearchDesc) {
         String dbName = functionSearchDesc.getName().getDb();
         Database db = getDb(dbName);
-        if (db == null) {
-            throw new Error("unknown database when replay log, db=" + dbName);
-        }
+        if (db == null) return;
         db.replayDropFunction(functionSearchDesc);
     }
 
@@ -6696,9 +6731,11 @@ public class Catalog {
 
     public void replayConvertDistributionType(TableInfo tableInfo) {
         Database db = getDb(tableInfo.getDbId());
+        if (db == null) return;
         db.writeLock();
         try {
             OlapTable tbl = (OlapTable) db.getTable(tableInfo.getTableId());
+            if (tbl == null) return;
             tbl.convertRandomDistributionToHashDistribution();
             LOG.info("replay modify distribution type of table: " + tbl.getName());
         } finally {
