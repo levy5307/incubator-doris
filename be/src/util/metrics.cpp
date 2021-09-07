@@ -323,10 +323,10 @@ std::string MetricRegistry::aggregate_metric(const std::string& entity_type,
         std::lock_guard<SpinLock> l(entity.first->_lock);
         entity.first->trigger_hook_unlocked(false);
         const auto &iter = entity.first->_labels.find(aggregate_label);
-        std::string label_value = iter->second.c_str();
         if (iter != entity.first->_labels.end()) {
-            const auto &map_iter = label_map.find(label_value);
+            std::string label_value = iter->second.c_str();
             for (const auto &metric : entity.first->_metrics) {
+                const auto &map_iter = label_map.find(label_value);
                 std::string value = metric.second->to_string();
                 int64_t realValue = atoll(value.c_str());
                 if (map_iter == label_map.end()) {
