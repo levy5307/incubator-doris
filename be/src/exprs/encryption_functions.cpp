@@ -31,9 +31,9 @@ namespace doris {
 void EncryptionFunctions::init() {
 }
 
-StringVal EncryptionFunctions::aes_encrypt(FunctionContext* ctx,
-        const StringVal &src, const StringVal &key) {
-    if (src.len == 0) {
+StringVal EncryptionFunctions::aes_encrypt(FunctionContext* ctx, const StringVal& src,
+                                           const StringVal& key) {
+    if (src.len == 0 || src.is_null) {
         return StringVal::null();
     }
 
@@ -50,9 +50,9 @@ StringVal EncryptionFunctions::aes_encrypt(FunctionContext* ctx,
     return AnyValUtil::from_buffer_temp(ctx, p.get(), ret_code);
 }
 
-StringVal EncryptionFunctions::aes_decrypt(FunctionContext* ctx,
-        const StringVal &src, const StringVal &key) {
-    if (src.len == 0) {
+StringVal EncryptionFunctions::aes_decrypt(FunctionContext* ctx, const StringVal& src,
+                                           const StringVal& key) {
+    if (src.len == 0 || src.is_null) {
         return StringVal::null();
     }
 
