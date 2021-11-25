@@ -3,7 +3,9 @@ image:
 
 variables:
   KUBERNETES_CPU_REQUEST: 6
+  KUBERNETES_CPU_LIMIT: 30
   KUBERNETES_MEMORY_REQUEST: 16Gi
+  KUBERNETES_MEMORY_LIMIT: 32Gi
 
 before_script:
   - ulimit -a
