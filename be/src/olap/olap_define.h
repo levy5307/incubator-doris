@@ -58,6 +58,8 @@ using StringOffsetType = uint32_t;
 using StringLengthType = uint16_t;
 static const uint16_t OLAP_STRING_MAX_BYTES = sizeof(StringLengthType);
 
+static constexpr uint16_t MAX_ZONE_MAP_INDEX_SIZE = 512;
+
 enum OLAPDataVersion {
     OLAP_V1 = 0,
     DORIS_V1 = 1,

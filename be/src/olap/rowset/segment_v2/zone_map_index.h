@@ -79,13 +79,15 @@ public:
 
     Status finish(fs::WritableBlock* wblock, ColumnIndexMetaPB* index_meta);
 
+    void moidfy_index_before_flush(ZoneMap& zone_map);
+
     uint64_t size() { return _estimated_size; }
 
 private:
     void _reset_zone_map(ZoneMap* zone_map) {
         // we should allocate max varchar length and set to max for min value
-        _field->set_to_max(zone_map->min_value);
-        _field->set_to_min(zone_map->max_value);
+        _field->set_to_zone_map_max(zone_map->min_value);
+        _field->set_to_zone_map_min(zone_map->max_value);
         zone_map->has_null = false;
         zone_map->has_not_null = false;
     }
