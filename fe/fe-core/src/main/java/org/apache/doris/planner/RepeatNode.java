@@ -19,6 +19,7 @@ package org.apache.doris.planner;
 
 import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.Expr;
+import org.apache.doris.analysis.FunctionCallExpr;
 import org.apache.doris.analysis.GroupByClause;
 import org.apache.doris.analysis.GroupingFunctionCallExpr;
 import org.apache.doris.analysis.GroupingInfo;
@@ -148,6 +149,14 @@ public class RepeatNode extends PlanNode {
                             slotIdSet.add(slotId);
                             break;
                         }
+                    } else if (exprList.get(i) instanceof FunctionCallExpr) {
+                        List<SlotRef> slotRefs = getSlotRefChildren(exprList.get(i));
+                        for (SlotRef slotRef : slotRefs) {
+                            if (bitSet.get(i) && slotRef.getSlotId() == slotId) {
+                                slotIdSet.add(slotId);
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -166,6 +175,18 @@ public class RepeatNode extends PlanNode {
         computeMemLayout(analyzer);
         computeStats(analyzer);
         createDefaultSmap(analyzer);
+    }
+
+    private List<SlotRef> getSlotRefChildren(Expr root) {
+        List<SlotRef> result = new ArrayList<>();
+        for (Expr child : root.getChildren()) {
+            if (child instanceof SlotRef) {
+                result.add((SlotRef) child);
+            } else {
+                result.addAll(getSlotRefChildren(child));
+            }
+        }
+        return result;
     }
 
     @Override
