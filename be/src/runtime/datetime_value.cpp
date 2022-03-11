@@ -952,6 +952,53 @@ uint8_t DateTimeValue::calc_week(const DateTimeValue& value, uint8_t mode, uint3
     return days / 7 + 1;
 }
 
+uint8_t DateTimeValue::calc_week(const DateTimeValue& value, uint8_t week_start, uint8_t day_in_first_week, uint32_t *year) {
+    auto day_nr = value.daynr();
+    uint64_t daynr_first_day = calc_daynr(value._year, 1, 1);
+    // what day is January 1st in the week(0~6, 0 indicates the first day in the week)
+    uint8_t weekday_first_day = calc_weekday(daynr_first_day, week_start);
+
+    *year = value._year;
+    uint64_t first_weekday; // first day in the first week
+    if (belong_to_last_year(weekday_first_day, day_in_first_week)) {
+        // the target date belongs to the last week of last year
+        first_weekday = daynr_first_day + (7 - weekday_first_day);
+        if (value._month == 1 && value._day <= (7 - weekday_first_day)) {
+            // the target date belongs to the last week of last year
+            (*year)--;
+            daynr_first_day = calc_daynr(*year, 1, 1);
+            weekday_first_day = calc_weekday(daynr_first_day, week_start);
+            if (belong_to_last_year(weekday_first_day, day_in_first_week)) {
+                first_weekday = daynr_first_day + (7 - weekday_first_day);
+            } else {
+                first_weekday = daynr_first_day - weekday_first_day;
+            }
+        }
+    } else {
+        // January 1st belongs to the first week of this year
+        first_weekday = daynr_first_day - weekday_first_day;
+        daynr_first_day = calc_daynr((*year) + 1, 1, 1);
+        weekday_first_day = calc_weekday(daynr_first_day, week_start);
+        uint64_t next_year_first_weekday;
+        if (belong_to_last_year(weekday_first_day, day_in_first_week)) {
+            next_year_first_weekday = daynr_first_day + (7 - weekday_first_day);
+        } else {
+            next_year_first_weekday = daynr_first_day - weekday_first_day;
+        }
+        if (day_nr >= next_year_first_weekday) {
+            // the target date belongs to the first week of next year
+            (*year)++;
+            return 1;
+        }
+    }
+    // the target date belongs to this year
+    return (day_nr - first_weekday) / 7 + 1;
+}
+
+bool DateTimeValue::belong_to_last_year(uint8_t weekday_first_day, uint8_t day_in_first_week) {
+    return weekday_first_day + day_in_first_week > 7;
+}
+
 uint8_t DateTimeValue::week(uint8_t mode) const {
     uint32_t year = 0;
     return calc_week(*this, mode, &year);
@@ -976,8 +1023,19 @@ uint32_t DateTimeValue::year_week(uint8_t mode) const {
     return year * 100 + week;
 }
 
+uint32_t DateTimeValue::year_week(uint8_t week_start, uint8_t day_in_first_week) const {
+    uint32_t year = 0;
+    uint8_t week = calc_week(*this, week_start, day_in_first_week, &year);
+    return year * 100 + week;
+}
+
 uint8_t DateTimeValue::calc_weekday(uint64_t day_nr, bool is_sunday_first_day) {
     return (day_nr + 5L + (is_sunday_first_day ? 1L : 0L)) % 7;
+}
+
+uint8_t DateTimeValue::calc_weekday(uint64_t day_nr, uint8_t week_start) {
+    // The initial era is friday
+    return (day_nr + 5L + (1L - week_start)) % 7;
 }
 
 // TODO(zhaochun): Think endptr is NULL
