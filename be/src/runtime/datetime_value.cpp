@@ -961,7 +961,7 @@ uint8_t DateTimeValue::calc_week(const DateTimeValue& value, uint8_t week_start,
     *year = value._year;
     uint64_t first_weekday; // first day in the first week
     if (belong_to_last_year(weekday_first_day, day_in_first_week)) {
-        // the target date belongs to the last week of last year
+        // January 1st belongs to the last week of last year
         first_weekday = daynr_first_day + (7 - weekday_first_day);
         if (value._month == 1 && value._day <= (7 - weekday_first_day)) {
             // the target date belongs to the last week of last year
@@ -977,6 +977,9 @@ uint8_t DateTimeValue::calc_week(const DateTimeValue& value, uint8_t week_start,
     } else {
         // January 1st belongs to the first week of this year
         first_weekday = daynr_first_day - weekday_first_day;
+    }
+
+    if (value._month == 12 && value._day >= 26) {
         daynr_first_day = calc_daynr((*year) + 1, 1, 1);
         weekday_first_day = calc_weekday(daynr_first_day, week_start);
         uint64_t next_year_first_weekday;
@@ -991,6 +994,7 @@ uint8_t DateTimeValue::calc_week(const DateTimeValue& value, uint8_t week_start,
             return 1;
         }
     }
+
     // the target date belongs to this year
     return (day_nr - first_weekday) / 7 + 1;
 }
