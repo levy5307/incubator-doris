@@ -390,7 +390,7 @@ Status ParquetReaderWrap::read(Tuple* tuple, const std::vector<SlotDescriptor*>&
                         RETURN_IF_ERROR(set_field_null(tuple, slot_desc));
                     } else {
                         float value = float_array->Value(_current_line_of_batch);
-                        wbytes = sprintf((char*)tmp_buf, "%f", value);
+                        wbytes = sprintf((char*)tmp_buf, "%.9f", value);
                         fill_slot(tuple, slot_desc, mem_pool, tmp_buf, wbytes);
                     }
                     break;
@@ -400,8 +400,8 @@ Status ParquetReaderWrap::read(Tuple* tuple, const std::vector<SlotDescriptor*>&
                     if (double_array->IsNull(_current_line_of_batch)) {
                         RETURN_IF_ERROR(set_field_null(tuple, slot_desc));
                     } else {
-                        float value = double_array->Value(_current_line_of_batch);
-                        wbytes = sprintf((char*)tmp_buf, "%f", value);
+                        double value = double_array->Value(_current_line_of_batch);
+                        wbytes = sprintf((char*)tmp_buf, "%.9f", value);
                         fill_slot(tuple, slot_desc, mem_pool, tmp_buf, wbytes);
                     }
                     break;
