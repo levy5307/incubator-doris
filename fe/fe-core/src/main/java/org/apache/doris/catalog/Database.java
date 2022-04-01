@@ -21,7 +21,6 @@ import org.apache.doris.catalog.Table.TableType;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
-import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.FeMetaVersion;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.UserException;
@@ -113,7 +112,7 @@ public class Database extends MetaObject implements Writable {
         this.idToTable = new ConcurrentHashMap<>();
         this.nameToTable = new HashMap<>();
         this.dataQuotaBytes = Config.default_db_data_quota_bytes;
-        this.replicaQuotaSize = FeConstants.default_db_replica_quota_size;
+        this.replicaQuotaSize = Config.default_db_replica_quota_size;
         this.dbState = DbState.NORMAL;
         this.attachDbName = "";
         this.clusterName = "";
@@ -512,7 +511,7 @@ public class Database extends MetaObject implements Writable {
         if (Catalog.getCurrentCatalogJournalVersion() >= FeMetaVersion.VERSION_81) {
             replicaQuotaSize = in.readLong();
         } else {
-            replicaQuotaSize = FeConstants.default_db_replica_quota_size;
+            replicaQuotaSize = Config.default_db_replica_quota_size;
         }
     }
 

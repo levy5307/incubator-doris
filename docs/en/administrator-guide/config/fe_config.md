@@ -143,6 +143,24 @@ This configuration is just for compatible with old version, this config has been
 The loading_load task executor pool size. This pool size limits the max running loading_load tasks.
 
 Currently, it only limits the loading_load task of broker load.
+### default_db_replica_quota_size
+
+Default: 1073741824
+
+IsMutable：true
+
+MasterOnly：true
+
+Used to set the default database replica quota. To set the quota size of a single database, you can use: 
+
+```
+Set the database replica quota
+ALTER DATABASE db_name SET REPLICA QUOTA quota;
+View configuration
+show data （Detail：HELP SHOW DATA）
+```
+
+### enable_batch_delete_by_default
 
 ### `async_pending_load_task_pool_size`
 

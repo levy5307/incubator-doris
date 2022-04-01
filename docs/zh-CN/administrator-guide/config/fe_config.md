@@ -159,6 +159,33 @@ FE 的配置项有两种方式进行配置：
 ### `audit_log_roll_interval`
 
 ### `audit_log_roll_mode`
+```
+设置数据库数据量配额，单位为B/K/KB/M/MB/G/GB/T/TB/P/PB
+ALTER DATABASE db_name SET DATA QUOTA quota;
+查看配置
+show data （其他用法：HELP SHOW DATA）
+```
+
+### default_db_replica_quota_size
+
+默认值：1073741824
+
+是否可以动态配置：true
+
+是否为 Master FE 节点独有的配置项：true
+
+用于设置默认数据库Replica数量配额大小，设置单个数据库配额大小可以使用：
+
+```
+设置数据库Replica数量配额
+ALTER DATABASE db_name SET REPLICA QUOTA quota;
+查看配置
+show data （其他用法：HELP SHOW DATA）
+```
+
+### enable_batch_delete_by_default
+
+默认值：false
 
 ### `audit_log_roll_num`
 
