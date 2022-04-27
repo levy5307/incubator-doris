@@ -49,6 +49,7 @@ under the License.
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <jprotobuf.version>2.2.11</jprotobuf.version>
+        <log4j.version>2.17.0</log4j.version>
         <skip.plugin>false</skip.plugin>
     </properties>
 
@@ -341,21 +342,21 @@ under the License.
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-api</artifactId>
-                <version>2.15.0</version>
+                <version>${log4j.version}</version>
             </dependency>
 
             <!-- https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core -->
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-core</artifactId>
-                <version>2.15.0</version>
+                <version>${log4j.version}</version>
             </dependency>
 
             <!-- https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-slf4j-impl -->
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-slf4j-impl</artifactId>
-                <version>2.15.0</version>
+                <version>${log4j.version}</version>
             </dependency>
 
             <!-- https://mvnrepository.com/artifact/io.dropwizard.metrics/metrics-core -->
