@@ -43,6 +43,7 @@ import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileLock;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedExceptionAction;
@@ -262,9 +263,12 @@ public class FileSystemManager {
                         long currentTime = System.currentTimeMillis();
                         Random random = new Random(currentTime);
                         int randNumber = random.nextInt(10000);
-                        tmpFilePath = "/tmp/." + Long.toString(currentTime) + "_" + Integer.toString(randNumber);
+                        tmpFilePath = "/tmp/." + Long.toString(currentTime) + "_" + Integer.toString(randNumber)
+                            + "_" + Thread.currentThread().getId();
                         FileOutputStream fileOutputStream = new FileOutputStream(tmpFilePath);
+                        FileLock lock = fileOutputStream.getChannel().lock();
                         fileOutputStream.write(base64decodedBytes);
+                        lock.release();
                         fileOutputStream.close();
                         keytab = tmpFilePath;
                     } else {

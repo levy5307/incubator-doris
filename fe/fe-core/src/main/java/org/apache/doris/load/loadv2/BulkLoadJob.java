@@ -231,6 +231,7 @@ public abstract class BulkLoadJob extends LoadJob {
                 return;
             } else {
                 // retry task
+                LOG.warn(new LogBuilder(LogKey.LOAD_JOB, id).add("transaction_id", transactionId).build() + "retry bulk load job");
                 idToTasks.remove(loadTask.getSignature());
                 if (loadTask instanceof LoadLoadingTask) {
                     loadStatistic.removeLoad(((LoadLoadingTask) loadTask).getLoadId());
