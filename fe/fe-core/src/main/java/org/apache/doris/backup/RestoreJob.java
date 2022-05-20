@@ -1372,14 +1372,13 @@ public class RestoreJob extends AbstractJob {
                         continue;
                     }
                     LOG.info("remove restored partition in table {} when cancelled: {}",
-                             restoreTbl.getName(), entry.second.getName());
-                    for (MaterializedIndex idx : entry.second.getMaterializedIndices(IndexExtState.VISIBLE)) {
-                        for (Tablet tablet : idx.getTablets()) {
-                            Catalog.getCurrentInvertedIndex().deleteTablet(tablet.getId());
-                        }
+                            restoreTbl.getName(), entry.second.getName());
+                    restoreTbl.writeLock();
+                    try {
+                        restoreTbl.dropPartition(dbId, entry.second.getName(), true /* force drop */);
+                    } finally {
+                        restoreTbl.writeUnlock();
                     }
-
-                    restoreTbl.dropPartition(dbId, entry.second.getName(), true /* is restore */);
                 }
             } finally {
                 db.writeUnlock();
