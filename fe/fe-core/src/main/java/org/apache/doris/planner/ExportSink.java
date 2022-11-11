@@ -34,14 +34,40 @@ public class ExportSink extends DataSink {
     private final String exportPath;
     private final String columnSeparator;
     private final String lineDelimiter;
+    private final boolean exportHeader;
     private BrokerDesc brokerDesc;
 
-    public ExportSink(String exportPath, String columnSeparator,
-                      String lineDelimiter, BrokerDesc brokerDesc) {
+    ExportSink(String exportPath, String columnSeparator,
+               String lineDelimiter, BrokerDesc brokerDesc, boolean exportHeader) {
         this.exportPath = exportPath;
         this.columnSeparator = columnSeparator;
         this.lineDelimiter = lineDelimiter;
         this.brokerDesc = brokerDesc;
+        this.exportHeader = exportHeader;
+    }
+
+    public static class Builder {
+        private final String exportPath;
+        private final String columnSeparator;
+        private final String lineDelimiter;
+        private boolean exportHeader = false;
+        private BrokerDesc brokerDesc;
+
+        public Builder(String exportPath, String columnSeparator, String lineDelimiter, BrokerDesc brokerDesc) {
+            this.exportPath = exportPath;
+            this.columnSeparator = columnSeparator;
+            this.lineDelimiter = lineDelimiter;
+            this.brokerDesc = brokerDesc;
+        }
+
+        public Builder setExportHeader(boolean exportHeader) {
+            this.exportHeader = exportHeader;
+            return this;
+        }
+
+        public ExportSink build() {
+            return new ExportSink(exportPath, columnSeparator, lineDelimiter, brokerDesc, exportHeader);
+        }
     }
 
     @Override
@@ -57,6 +83,7 @@ public class ExportSink extends DataSink {
                 + new PrintableMap<String, String>(
                         brokerDesc.getProperties(), "=", true, false)
                 + ")");
+        sb.append(prefix + "  exportHeader=" + exportHeader + "\n");
         sb.append("\n");
         return sb.toString();
     }
@@ -71,6 +98,7 @@ public class ExportSink extends DataSink {
             tExportSink.addToBrokerAddresses(new TNetworkAddress(broker.ip, broker.port));
         }
         tExportSink.setProperties(brokerDesc.getProperties());
+        tExportSink.setExportHeader(exportHeader);
 
         result.setExportSink(tExportSink);
         return result;

@@ -64,6 +64,7 @@ private:
     Status open_file_writer();
     Status gen_row_buffer(TupleRow* row, std::stringstream* ss);
     std::string gen_file_name();
+    Status send_header(RuntimeState* state);
 
     RuntimeState* _state;
 
@@ -76,6 +77,7 @@ private:
 
     TExportSink _t_export_sink;
     std::unique_ptr<FileWriter> _file_writer;
+    bool _export_header;
 
     RuntimeProfile* _profile;
 

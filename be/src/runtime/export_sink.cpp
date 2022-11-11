@@ -18,6 +18,7 @@
 #include "runtime/export_sink.h"
 #include <sstream>
 
+#include "common/compiler_util.h"
 #include "exprs/expr.h"
 #include "runtime/runtime_state.h"
 #include "runtime/mysql_table_sink.h"
@@ -39,6 +40,7 @@ ExportSink::ExportSink(ObjectPool* pool,
         _pool(pool),
         _row_desc(row_desc),
         _t_output_expr(t_exprs),
+        _export_header(false),
         _bytes_written_counter(nullptr),
         _rows_written_counter(nullptr),
         _write_timer(nullptr) {
@@ -50,6 +52,9 @@ ExportSink::~ExportSink() {
 Status ExportSink::init(const TDataSink& t_sink) {
     RETURN_IF_ERROR(DataSink::init(t_sink));
     _t_export_sink = t_sink.export_sink;
+    if (_t_export_sink.__isset.export_header) {
+        _export_header = _t_export_sink.export_header;
+    }
 
     // From the thrift expressions create the real exprs.
     RETURN_IF_ERROR(Expr::create_expr_trees(_pool, _t_output_expr, &_output_expr_ctxs));
@@ -85,6 +90,9 @@ Status ExportSink::open(RuntimeState* state) {
     RETURN_IF_ERROR(Expr::open(_output_expr_ctxs, state));
     // open broker
     RETURN_IF_ERROR(open_file_writer());
+    if (_export_header) {
+        send_header(state);
+    }
     return Status::OK();
 }
 
@@ -288,4 +296,22 @@ std::string ExportSink::gen_file_name() {
     return file_name.str();
 }
 
+Status ExportSink::send_header(RuntimeState* state) {
+    std::stringstream ss;
+    const auto& slots = _row_desc.slots();
+    for (int i = 0; i < slots.size(); i++) {
+        const auto& slot = slots.at(i);
+        ss << slot->col_name();
+        if (LIKELY(i < slots.size() - 1)) {
+            ss << _t_export_sink.column_separator;
+        }
+    }
+    ss << _t_export_sink.line_delimiter;
+
+    const std::string& buf = ss.str();
+    size_t written_len = 0;
+    RETURN_IF_ERROR(_file_writer->write(reinterpret_cast<const uint8_t*>(buf.c_str()), buf.size(),
+                                        &written_len));
+    return Status::OK();
 }
+} // namespace doris

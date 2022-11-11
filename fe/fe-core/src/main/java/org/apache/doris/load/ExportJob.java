@@ -111,6 +111,7 @@ public class ExportJob implements Writable {
     private String lineDelimiter;
     private Map<String, String> properties = Maps.newHashMap();
     private List<String> partitions;
+    private boolean exportHeader;
 
     private TableName tableName;
 
@@ -164,6 +165,7 @@ public class ExportJob implements Writable {
         this.exportPath = "";
         this.columnSeparator = "\t";
         this.lineDelimiter = "\n";
+        this.exportHeader = false;
     }
 
     public ExportJob(long jobId) {
@@ -183,6 +185,7 @@ public class ExportJob implements Writable {
 
         this.columnSeparator = stmt.getColumnSeparator();
         this.lineDelimiter = stmt.getLineDelimiter();
+        this.exportHeader = stmt.getExportHeader();
         this.properties = stmt.getProperties();
 
         String path = stmt.getPath();
@@ -217,7 +220,9 @@ public class ExportJob implements Writable {
         } catch (URISyntaxException e) {
             throw new DdlException("Invalid export path: " + getExportPath());
         }
-        exportSink = new ExportSink(tmpExportPathStr, getColumnSeparator(), getLineDelimiter(), brokerDesc);
+        exportSink = new ExportSink.Builder(
+                tmpExportPathStr, getColumnSeparator(), getLineDelimiter(), brokerDesc)
+                .setExportHeader(exportHeader).build();
         plan();
     }
 

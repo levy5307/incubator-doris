@@ -462,6 +462,11 @@ public:
         return _tuple_desc_map;
     }
 
+    const std::vector<SlotDescriptor*>& slots() const {
+        DCHECK_GT(_tuple_desc_map.size(), 0);
+        return _tuple_desc_map[0]->slots();
+    }
+
     // Populate row_tuple_ids with our ids.
     void to_thrift(std::vector<TTupleId>* row_tuple_ids);
     void to_protobuf(

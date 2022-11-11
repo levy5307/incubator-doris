@@ -57,6 +57,7 @@ public class ExportStmt extends StatementBase {
     private final static Logger LOG = LogManager.getLogger(ExportStmt.class);
 
     public static final String TABLET_NUMBER_PER_TASK_PROP = "tablet_num_per_task";
+    public static final String EXPORT_HEADER = "export_header";
 
     private static final String DEFAULT_COLUMN_SEPARATOR = "\t";
     private static final String DEFAULT_LINE_DELIMITER = "\n";
@@ -68,6 +69,7 @@ public class ExportStmt extends StatementBase {
     private Map<String, String> properties = Maps.newHashMap();
     private String columnSeparator;
     private String lineDelimiter;
+    private boolean exportHeader;
 
     private TableRef tableRef;
 
@@ -81,6 +83,7 @@ public class ExportStmt extends StatementBase {
         this.brokerDesc = brokerDesc;
         this.columnSeparator = DEFAULT_COLUMN_SEPARATOR;
         this.lineDelimiter = DEFAULT_LINE_DELIMITER;
+        this.exportHeader = false;
     }
 
     public TableName getTblName() {
@@ -109,6 +112,10 @@ public class ExportStmt extends StatementBase {
 
     public String getLineDelimiter() {
         return this.lineDelimiter;
+    }
+
+    public boolean getExportHeader() {
+        return this.exportHeader;
     }
 
     @Override
@@ -239,6 +246,10 @@ public class ExportStmt extends StatementBase {
         this.columnSeparator = PropertyAnalyzer.analyzeColumnSeparator(
                 properties, ExportStmt.DEFAULT_COLUMN_SEPARATOR);
         this.lineDelimiter = PropertyAnalyzer.analyzeLineDelimiter(properties, ExportStmt.DEFAULT_LINE_DELIMITER);
+        if (properties.containsKey(EXPORT_HEADER)) {
+            this.exportHeader = Boolean.parseBoolean(properties.get(EXPORT_HEADER));
+        }
+
         // exec_mem_limit
         if (properties.containsKey(LoadStmt.EXEC_MEM_LIMIT)) {
             try {

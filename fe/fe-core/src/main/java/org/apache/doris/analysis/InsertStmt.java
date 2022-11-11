@@ -752,11 +752,10 @@ public class InsertStmt extends DdlStmt {
             // Map<String, String> brokerProperties = Maps.newHashMap();
             // BrokerDesc brokerDesc = new BrokerDesc("test_broker", brokerProperties);
             BrokerDesc brokerDesc = new BrokerDesc(table.getBrokerName(), table.getBrokerProperties());
-            dataSink = new ExportSink(
-                    table.getWritablePath(),
+            dataSink = new ExportSink.Builder(table.getWritablePath(),
                     table.getColumnSeparator(),
                     table.getLineDelimiter(),
-                    brokerDesc);
+                    brokerDesc).build();
             dataPartition = dataSink.getOutputPartition();
         } else {
             dataSink = DataSink.createDataSink(targetTable);
