@@ -399,7 +399,7 @@ int main(int argc, char** argv) {
 
     // init and open storage engine
     doris::StorageEngine* engine = nullptr;
-    auto options = doris::EngineOptions::Builder(std::move(paths)).set_backend_uid(doris::UniqueId::gen_uid())->build();
+    auto options = doris::EngineOptions::Builder(std::move(paths)).set_backend_uid(doris::UniqueId::gen_uid()).build();
     if (options.get() == nullptr || (engine = doris::StorageEngine::init_instance(*options.get())) == nullptr) {
         LOG(FATAL) << "fail to open StorageEngine, res=" << st.get_error_msg();
         exit(-1);
