@@ -43,9 +43,45 @@ Status parse_root_path(const std::string& root_path, StorePath* path);
 Status parse_conf_store_paths(const std::string& config_path, std::vector<StorePath>* path);
 
 struct EngineOptions {
+    EngineOptions(const std::vector<StorePath> &store_paths, const UniqueId &backend_uid) 
+    : store_paths(store_paths), backend_uid(backend_uid) {
+    }
+
     // list paths that tablet will be put into.
     std::vector<StorePath> store_paths;
     // BE's UUID. It will be reset every time BE restarts.
     UniqueId backend_uid {0, 0};
+
+    class Builder() {
+    public:
+        Builder(std::vector<StorePath> &&store_paths) : store_paths(std::move(store_paths)) {
+        }
+
+        Builder* set_backend_uid(const UniqueId &backend_uid) {
+            this->backend_uid = backend_uid;
+            return this;
+        }
+
+        std::unique_ptr<EngineOptions> build() {
+            if (!validate()) {
+                return nullptr;
+            }
+
+            return std::make_unique<EngineOptions>(store_paths, backend_uid);
+        }
+    private:
+        // list paths that tablet will be put into.
+        std::vector<StorePath> store_paths;
+        // BE's UUID. It will be reset every time BE restarts.
+        UniqueId backend_uid {0, 0};
+
+    private:
+        bool validate() {
+            if (this->store_paths.empty()) {
+                return false;
+            }
+            return true;
+        }
+    }
 };
 } // namespace doris

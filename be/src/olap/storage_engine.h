@@ -69,12 +69,11 @@ using SegCompactionCandidatesSharedPtr = std::shared_ptr<SegCompactionCandidates
 // allocation/deallocation must be done outside.
 class StorageEngine {
 public:
-    StorageEngine(const EngineOptions& options);
-    ~StorageEngine();
+    static StorageEngine* instance() { 
+        return &_s_instance; 
+    }
 
-    static Status open(const EngineOptions& options, StorageEngine** engine_ptr);
-
-    static StorageEngine* instance() { return _s_instance; }
+    static StorageEngine* init_instance(const EngineOptions& options);
 
     Status create_tablet(const TCreateTabletReq& request);
 
@@ -195,6 +194,9 @@ public:
     }
 
 private:
+    StorageEngine(const EngineOptions& options);
+    ~StorageEngine();
+
     // Instance should be inited from `static open()`
     // MUST NOT be called in other circumstances.
     Status _open();
@@ -317,7 +319,8 @@ private:
     int32_t _effective_cluster_id;
     bool _is_all_cluster_id_exist;
 
-    static StorageEngine* _s_instance;
+    static std::unique_ptr<StorageEngine> _s_instance;
+    static once_flag once;
 
     std::mutex _gc_mutex;
     // map<rowset_id(str), RowsetSharedPtr>, if we use RowsetId as the key, we need custom hash func

@@ -398,12 +398,9 @@ int main(int argc, char** argv) {
     doris::TabletSchemaCache::create_global_schema_cache();
 
     // init and open storage engine
-    doris::EngineOptions options;
-    options.store_paths = paths;
-    options.backend_uid = doris::UniqueId::gen_uid();
     doris::StorageEngine* engine = nullptr;
-    auto st = doris::StorageEngine::open(options, &engine);
-    if (!st.ok()) {
+    auto options = doris::EngineOptions::Builder(std::move(paths)).set_backend_uid(doris::UniqueId::gen_uid())->build();
+    if (options.get() == nullptr || (engine = doris::StorageEngine::init_instance(*options.get())) == nullptr) {
         LOG(FATAL) << "fail to open StorageEngine, res=" << st.get_error_msg();
         exit(-1);
     }

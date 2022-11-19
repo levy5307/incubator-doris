@@ -82,23 +82,18 @@ namespace doris {
 
 DEFINE_GAUGE_METRIC_PROTOTYPE_2ARG(unused_rowsets_count, MetricUnit::ROWSETS);
 
-StorageEngine* StorageEngine::_s_instance = nullptr;
+std::unique_ptr<StorageEngine> StorageEngine::_s_instance = nullptr;
 
-static Status _validate_options(const EngineOptions& options) {
-    if (options.store_paths.empty()) {
-        return Status::InternalError("store paths is empty");
-    }
-    return Status::OK();
-}
-
-Status StorageEngine::open(const EngineOptions& options, StorageEngine** engine_ptr) {
-    RETURN_IF_ERROR(_validate_options(options));
+StorageEngine* StorageEngine::init_instance(const EngineOptions& options) {
     LOG(INFO) << "starting backend using uid:" << options.backend_uid.to_string();
-    std::unique_ptr<StorageEngine> engine(new StorageEngine(options));
-    RETURN_NOT_OK_STATUS_WITH_WARN(engine->_open(), "open engine failed");
-    *engine_ptr = engine.release();
-    LOG(INFO) << "success to init storage engine.";
-    return Status::OK();
+    auto engine_ptr = std::make_unique<StorageEngine>(options);
+    if (engine_ptr->_open().ok()) {
+        LOG(INFO) << "success to init storage engine.";
+        std::call_once(once, [&] {
+            _s_instance = std::move(engine_ptr);
+        }
+    });
+    return _s_instance.get();
 }
 
 StorageEngine::StorageEngine(const EngineOptions& options)
