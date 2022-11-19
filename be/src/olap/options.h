@@ -46,6 +46,7 @@ struct EngineOptions {
     EngineOptions(const std::vector<StorePath> &store_paths, const UniqueId &backend_uid) 
     : store_paths(store_paths), backend_uid(backend_uid) {
     }
+    ~EngineOptions() = default;
 
     // list paths that tablet will be put into.
     std::vector<StorePath> store_paths;
@@ -54,12 +55,12 @@ struct EngineOptions {
 
     class Builder() {
     public:
-        Builder(std::vector<StorePath> &&store_paths) : store_paths(std::move(store_paths)) {
-        }
+        explicit Builder(std::vector<StorePath> &&store_paths) : store_paths(std::move(store_paths)) {}
+        ~Builder() = default;
 
-        Builder* set_backend_uid(const UniqueId &backend_uid) {
+        Builder& set_backend_uid(const UniqueId &backend_uid) {
             this->backend_uid = backend_uid;
-            return this;
+            return *this;
         }
 
         std::unique_ptr<EngineOptions> build() {

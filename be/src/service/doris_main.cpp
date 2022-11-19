@@ -398,12 +398,12 @@ int main(int argc, char** argv) {
     doris::TabletSchemaCache::create_global_schema_cache();
 
     // init and open storage engine
-    doris::StorageEngine* engine = nullptr;
     auto options = doris::EngineOptions::Builder(std::move(paths)).set_backend_uid(doris::UniqueId::gen_uid()).build();
-    if (options.get() == nullptr || (engine = doris::StorageEngine::init_instance(*options.get())) == nullptr) {
+    if (options.get() == nullptr || doris::StorageEngine::init_instance(*options.get()).not_ok()) {
         LOG(FATAL) << "fail to open StorageEngine, res=" << st.get_error_msg();
         exit(-1);
     }
+    doris::StorageEngine* engine = doris::StorageEngine::instance();
     exec_env->set_storage_engine(engine);
     engine->set_heartbeat_flags(exec_env->heartbeat_flags());
 

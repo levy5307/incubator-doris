@@ -87,13 +87,14 @@ std::unique_ptr<StorageEngine> StorageEngine::_s_instance = nullptr;
 StorageEngine* StorageEngine::init_instance(const EngineOptions& options) {
     LOG(INFO) << "starting backend using uid:" << options.backend_uid.to_string();
     auto engine_ptr = std::make_unique<StorageEngine>(options);
-    if (engine_ptr->_open().ok()) {
+    Status status = engine_ptr->_open();
+    if (st.ok()) {
         LOG(INFO) << "success to init storage engine.";
         std::call_once(once, [&] {
             _s_instance = std::move(engine_ptr);
         }
-    });
-    return _s_instance.get();
+    };
+    return status;
 }
 
 StorageEngine::StorageEngine(const EngineOptions& options)

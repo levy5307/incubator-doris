@@ -73,7 +73,7 @@ public:
         return &_s_instance; 
     }
 
-    static StorageEngine* init_instance(const EngineOptions& options);
+    static Status init_instance(const EngineOptions& options);
 
     Status create_tablet(const TCreateTabletReq& request);
 
