@@ -69,11 +69,10 @@ using SegCompactionCandidatesSharedPtr = std::shared_ptr<SegCompactionCandidates
 // allocation/deallocation must be done outside.
 class StorageEngine {
 public:
-    static StorageEngine* instance() { 
-        return &_s_instance; 
-    }
-
     static Status init_instance(const EngineOptions& options);
+    static StorageEngine* instance() { 
+        return _s_instance.get(); 
+    }
 
     Status create_tablet(const TCreateTabletReq& request);
 
