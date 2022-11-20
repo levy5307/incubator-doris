@@ -398,6 +398,7 @@ public:
     static Status ConstructErrorStatus(int16_t precise_code);
 
     bool ok() const { return _code == TStatusCode::OK; }
+    bool not_ok() const { return _code != TStatusCode::OK; }
 
     bool is_cancelled() const { return code() == TStatusCode::CANCELLED; }
     bool is_mem_limit_exceeded() const { return code() == TStatusCode::MEM_LIMIT_EXCEEDED; }

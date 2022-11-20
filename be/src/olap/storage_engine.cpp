@@ -84,7 +84,7 @@ DEFINE_GAUGE_METRIC_PROTOTYPE_2ARG(unused_rowsets_count, MetricUnit::ROWSETS);
 
 std::unique_ptr<StorageEngine> StorageEngine::_s_instance = nullptr;
 
-StorageEngine* StorageEngine::init_instance(const EngineOptions& options) {
+Status StorageEngine::init_instance(const EngineOptions& options) {
     LOG(INFO) << "starting backend using uid:" << options.backend_uid.to_string();
     auto engine_ptr = std::make_unique<StorageEngine>(options);
     Status status = engine_ptr->_open();
